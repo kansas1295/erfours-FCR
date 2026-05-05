@@ -1,0 +1,22 @@
+{
+  "entities": {
+    "FlockData": {
+      "title": "Flock Data",
+      "description": "Historical data for a broiler flock grow-out period.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "initialPop": { "type": "number" },
+        "currentPop": { "type": "number" },
+        "totalWeight": { "type": "number" },
+        "totalFeed": { "type": "number" },
+        "age": { "type": "number" },
+        "fcr": { "type": "number" },
+        "ip": { "type": "number" },
+        "mortality": { "type": "number" }
+      },
+      "required": ["id", "date", "initialPop", "currentPop", "totalWeight", "totalFeed", "age", "fcr", "ip", "mortality"]
+    }
+  }
+}
