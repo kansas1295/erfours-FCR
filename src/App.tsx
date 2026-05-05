@@ -157,10 +157,18 @@ export default function App() {
   const [harvestDate, setHarvestDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [harvestAge, setHarvestAge] = useState<string>('');
 
-  // Sync harvest age with main age if empty
+  // Sync harvest age & weight with daily/main state if empty
   useEffect(() => {
-    if (!harvestAge && age) setHarvestAge(age);
-  }, [age, harvestAge]);
+    if (!harvestAge && (dailyAge || age)) setHarvestAge(dailyAge || age);
+    if (!harvestAvgWeight && dailyWeight) {
+      setHarvestAvgWeight(dailyWeight);
+      const b = parseFloat(harvestBirds) || 0;
+      const aw = parseFloat(dailyWeight) || 0;
+      if (b > 0 && aw > 0) {
+        setHarvestTotalWeight((b * aw / 1000).toFixed(2));
+      }
+    }
+  }, [age, harvestAge, dailyAge, dailyWeight, harvestAvgWeight, harvestBirds]);
 
   const stats = useMemo(() => {
     const p1 = parseFloat(initialPop) || 0;
@@ -350,6 +358,46 @@ export default function App() {
     setHarvestAvgWeight('');
     setHarvestTotalWeight('');
     alert('Data panen berhasil disimpan dengan Indeks Performa.');
+  };
+
+  const exportHarvestToCSV = () => {
+    if (harvestHistory.length === 0) {
+      alert('Belum ada data panen untuk diekspor.');
+      return;
+    }
+
+    const headers = [
+      'Tanggal',
+      'Umur (Hari)',
+      'Jumlah Ekor (Ekor)',
+      'Rata-rata Bobot (gr)',
+      'Total Bobot (kg)',
+      'Indeks Performa (IP)'
+    ];
+
+    const rows = harvestHistory.map(r => [
+      r.date,
+      r.age,
+      r.birds,
+      r.avgWeight.toFixed(0),
+      r.totalWeight.toFixed(2),
+      r.ip.toFixed(2)
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `harvest_history_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const exportToCSV = () => {
@@ -856,10 +904,11 @@ export default function App() {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight">Rata-rata Bobot (gr/ekor)</label>
+                      <label className="block text-[10px] font-black text-rose-500 uppercase tracking-tight">Bobot Rata-rata Panen (gr/ekor)</label>
                       <div className="relative">
                         <input 
                           type="number" 
+                          placeholder="0"
                           value={harvestAvgWeight} 
                           onChange={(e) => {
                             const val = e.target.value;
@@ -872,15 +921,16 @@ export default function App() {
                           }} 
                           className="w-full border border-slate-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-lg font-black tracking-tighter" 
                         />
-                        <span className="absolute right-3 top-2.5 text-slate-400 text-[10px] font-black uppercase">GRAM</span>
+                        <span className="absolute right-3 top-2.5 text-slate-400 text-[10px] font-black uppercase">gr/ekor</span>
                       </div>
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight">Total Bobot Panen (kg)</label>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight">Total Berat Panen (kg)</label>
                       <div className="relative">
                         <input 
                           type="number" 
+                          placeholder="0"
                           value={harvestTotalWeight} 
                           onChange={(e) => {
                             const val = e.target.value;
@@ -909,10 +959,44 @@ export default function App() {
 
               <section className="flex-1 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
                 <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
-                  <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Riwayat Panen Per Hari</h4>
-                  <div className="text-right">
-                    <p className="text-[10px] font-black text-slate-400 uppercase">Total Birds: <span className="text-slate-900">{harvestHistory.reduce((s, r) => s + r.birds, 0).toLocaleString()}</span></p>
-                    <p className="text-[10px] font-black text-slate-400 uppercase">Total Mass: <span className="text-slate-900">{harvestHistory.reduce((s, r) => s + r.totalWeight, 0).toFixed(1)} KG</span></p>
+                  <div className="flex items-center gap-4">
+                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Riwayat Panen Per Hari</h4>
+                    <button 
+                      onClick={exportHarvestToCSV}
+                      className="flex items-center gap-1.5 transition-colors bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest"
+                    >
+                      <Download size={10} /> Export CSV
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-6 text-right">
+                    <div className="flex flex-col">
+                      <p className="text-[8px] font-black text-slate-400 uppercase">Total Birds</p>
+                      <p className="text-sm font-black text-slate-900">{harvestHistory.reduce((s, r) => s + r.birds, 0).toLocaleString()} <span className="text-[9px] text-slate-400">EKOR</span></p>
+                    </div>
+                    <div className="flex flex-col">
+                      <p className="text-[8px] font-black text-slate-400 uppercase">Cumulative Mass</p>
+                      <p className="text-sm font-black text-emerald-600">{harvestHistory.reduce((s, r) => s + r.totalWeight, 0).toFixed(1)} <span className="text-[9px]">KG</span></p>
+                    </div>
+                    <div className="flex flex-col border-l border-slate-100 pl-6">
+                      <p className="text-[8px] font-black text-slate-400 uppercase">Weighted Avg Weight</p>
+                      <p className="text-sm font-black text-slate-900">
+                        {(() => {
+                          const totalB = harvestHistory.reduce((s, r) => s + r.birds, 0);
+                          const totalW = harvestHistory.reduce((s, r) => s + r.totalWeight, 0);
+                          return totalB > 0 ? (totalW * 1000 / totalB).toFixed(0) : '0';
+                        })()}
+                        <span className="text-[9px] text-slate-400 ml-1">GR/EKOR</span>
+                      </p>
+                    </div>
+                    <div className="flex flex-col border-l border-slate-100 pl-6">
+                      <p className="text-[8px] font-black text-slate-400 uppercase">Avg IP Panen</p>
+                      <p className="text-sm font-black text-emerald-700">
+                        {(() => {
+                          const count = harvestHistory.length;
+                          return count > 0 ? (harvestHistory.reduce((s, r) => s + r.ip, 0) / count).toFixed(1) : '0.0';
+                        })()}
+                      </p>
+                    </div>
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto">
