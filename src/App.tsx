@@ -174,24 +174,42 @@ export default function App() {
   const stats = useMemo(() => {
     const p1 = parseFloat(initialPop) || 0;
     const p2 = parseFloat(currentPop) || 0;
-    const w = parseFloat(totalWeight) || 0;
-    const f = parseFloat(totalFeed) || 0;
     const a = parseFloat(age) || 0;
-
-    const df = (parseFloat(dailyFeedSak) || 0) * 50; 
     const dw = parseFloat(dailyWeight) || 0;
     const pw = parseFloat(prevWeight) || 0;
+    const df = (parseFloat(dailyFeedSak) || 0) * 50; 
     
-    // Dynamic opening population from history
-    const histDeaths = history.reduce((sum, r) => sum + (r.dailyDeaths || 0), 0);
-    const openingPopToday = p1 - histDeaths;
+    const currentDay = parseFloat(dailyAge || age) || 0;
+    const currentWeek = Math.ceil(currentDay / 7);
+    
+    // Derived from history - specifically for records PRIOR to the current age being viewed
+    const histFeedBeforeToday = history
+      .filter(r => r.age < currentDay)
+      .reduce((sum, r) => sum + (r.dailyFeed || 0), 0);
+    const histDeathsBeforeToday = history
+      .filter(r => r.age < currentDay)
+      .reduce((sum, r) => sum + (r.dailyDeaths || 0), 0);
+    
+    const openingPopToday = p1 - histDeathsBeforeToday;
     const pp = openingPopToday;
 
     if (p1 === 0 || a === 0) return null;
 
+    // Smartly derive total feed if not explicitly set
+    let fValue = parseFloat(totalFeed);
+    if (isNaN(fValue) || (view === 'daily' && df > 0)) {
+      fValue = histFeedBeforeToday + df;
+    }
+
+    // Smartly derive total weight if not explicitly set
+    let wValue = parseFloat(totalWeight);
+    if (isNaN(wValue) || (view === 'daily' && dw > 0)) {
+      wValue = (dw * p2) / 1000;
+    }
+
     const mortality = ((p1 - p2) / p1) * 100;
-    const avgWeightKg = p2 > 0 ? (w / p2) : 0;
-    const fcr = w > 0 ? (f / w) : 0;
+    const avgWeightKg = p2 > 0 ? (wValue / p2) : 0;
+    const fcr = wValue > 0 ? (fValue / wValue) : 0;
     const ip = (p2 > 0 && fcr > 0 && a > 0) ? (((100 - mortality) * avgWeightKg) / (fcr * a)) * 100 : 0;
 
     // Daily Calculations
@@ -208,17 +226,14 @@ export default function App() {
     const dailyDeaths = (pp > 0 && p2 > 0) ? (pp - p2) : 0;
     const dailyMortalityRate = (pp > 0) ? (dailyDeaths / pp) * 100 : 0;
 
-    const currentDay = parseFloat(dailyAge) || 0;
-    const currentWeek = Math.ceil(currentDay / 7);
-    
-    const weeklyDeathsHistory = history
-      .filter(r => Math.ceil(r.age / 7) === currentWeek)
-      .reduce((sum, r) => sum + (r.dailyDeaths || 0), 0);
+    const historyWeekExcludingToday = history.filter(r => 
+      Math.ceil(r.age / 7) === currentWeek && r.age !== currentDay
+    );
+
+    const weeklyDeathsHistory = historyWeekExcludingToday.reduce((sum, r) => sum + (r.dailyDeaths || 0), 0);
     const totalWeeklyDeaths = weeklyDeathsHistory + dailyDeaths;
 
-    const statsWeeklyFeed = history
-      .filter(r => Math.ceil(r.age / 7) === currentWeek)
-      .reduce((sum, r) => sum + (r.dailyFeed || 0), 0) + df;
+    const statsWeeklyFeed = historyWeekExcludingToday.reduce((sum, r) => sum + (r.dailyFeed || 0), 0) + df;
 
     const getIpStatus = (val: number) => {
       if (val >= 400) return 'PREMIUM GRADE';
@@ -250,6 +265,8 @@ export default function App() {
       weeklyDeaths: totalWeeklyDeaths,
       weeklyFeed: statsWeeklyFeed.toFixed(1),
       weeklyFeedRaw: statsWeeklyFeed, // for SAK calculation
+      cumulativeFeed: fValue.toFixed(1),
+      cumulativeWeight: wValue.toFixed(1),
       currentWeek: currentWeek || '-'
     };
   }, [initialPop, currentPop, totalWeight, totalFeed, age, dailyFeedSak, dailyWeight, prevWeight, history, dailyAge]);
@@ -275,8 +292,10 @@ export default function App() {
     
     const p1 = parseFloat(initialPop) || 0;
     const p2 = parseFloat(currentPop) || 0;
-    const w = parseFloat(totalWeight) || 0;
-    const f = parseFloat(totalFeed) || 0;
+    
+    // Use the smarter derived values from stats if available
+    const f = stats ? parseFloat(stats.cumulativeFeed) : (parseFloat(totalFeed) || 0);
+    const w = stats ? parseFloat(stats.cumulativeWeight) : (parseFloat(totalWeight) || 0);
 
     const newRecord: FlockRecord = {
       id: crypto.randomUUID(),
@@ -784,11 +803,43 @@ export default function App() {
                     </div>
                     <div className="space-y-1.5">
                       <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight">Total Bobot Panen (kg)</label>
-                      <input type="number" value={totalWeight} onChange={(e) => setTotalWeight(e.target.value)} className="w-full border border-slate-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-lg font-black" />
+                      <div className="relative">
+                        <input 
+                          type="number" 
+                          value={totalWeight} 
+                          onChange={(e) => setTotalWeight(e.target.value)} 
+                          placeholder={stats?.cumulativeWeight || "0"}
+                          className="w-full border border-slate-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-lg font-black" 
+                        />
+                        <span className="absolute right-3 top-2.5 text-slate-400 text-[10px] font-black uppercase tracking-tighter">
+                          {totalWeight ? 'KG' : stats ? `AUTO: ${stats.cumulativeWeight} KG` : 'KG'}
+                        </span>
+                      </div>
+                      {!totalWeight && stats && (
+                        <p className="text-[9px] font-bold text-emerald-600 mt-1 uppercase tracking-tighter">
+                          *BOBOT TOTAL BERDASARKAN POPULASI & RATA-RATA
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-1.5">
                       <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight">Total Pakan Terpakai (kg)</label>
-                      <input type="number" value={totalFeed} onChange={(e) => setTotalFeed(e.target.value)} className="w-full border border-slate-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-lg font-black" />
+                      <div className="relative">
+                        <input 
+                          type="number" 
+                          value={totalFeed} 
+                          onChange={(e) => setTotalFeed(e.target.value)} 
+                          placeholder={stats?.cumulativeFeed || "0"}
+                          className="w-full border border-slate-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-lg font-black" 
+                        />
+                        <span className="absolute right-3 top-2.5 text-slate-400 text-[10px] font-black uppercase tracking-tighter">
+                          {totalFeed ? `≈ ${(parseFloat(totalFeed) / 50).toFixed(1)} SAK` : stats ? `AUTO: ${(parseFloat(stats.cumulativeFeed) / 50).toFixed(1)} SAK` : 'KG'}
+                        </span>
+                      </div>
+                      {!totalFeed && stats && (
+                        <p className="text-[9px] font-bold text-emerald-600 mt-1 uppercase tracking-tighter">
+                          *MENGGUNAKAN DATA DARI RIWAYAT: {stats.cumulativeFeed} KG
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1230,7 +1281,8 @@ export default function App() {
                             <th className="py-4 px-6 border-b border-slate-100">Mati Harian</th>
                             <th className="py-4 px-6 border-b border-slate-100">Mati Minggu</th>
                             <th className="py-4 px-6 border-b border-slate-100">% Mort</th>
-                            <th className="py-4 px-6 border-b border-slate-100">Action</th>
+                            <th className="py-4 px-6 border-b border-slate-100 text-emerald-600">Total Pakan</th>
+                            <th className="py-4 px-6 border-b border-slate-100 text-right">Action</th>
                           </tr>
                         </thead>
                         <tbody className="text-xs font-bold text-slate-600">
@@ -1263,6 +1315,10 @@ export default function App() {
                               <td className="py-4 px-6 text-rose-500 font-bold">{record.dailyDeaths?.toLocaleString() || 0} <span className="text-[9px]">ekor</span></td>
                               <td className="py-4 px-6 text-rose-600 font-bold">{record.weeklyDeaths?.toLocaleString() || 0} <span className="text-[9px]">ekor</span></td>
                               <td className="py-4 px-6 text-rose-600">{record.mortality.toFixed(2)}%</td>
+                              <td className="py-4 px-6 text-emerald-700 font-black">
+                                {record.totalFeed.toFixed(1)} <span className="text-[9px]">kg</span>
+                                <div className="text-[8px] text-emerald-500 font-bold">{(record.totalFeed / 50).toFixed(1)} SAK</div>
+                              </td>
                               <td className="py-4 px-6">
                                 <button 
                                   onClick={() => deleteRecord(record.id)}
@@ -1275,7 +1331,7 @@ export default function App() {
                           ))}
                           {history.length === 0 && (
                             <tr>
-                              <td colSpan={6} className="py-20 text-center text-slate-400 font-black uppercase tracking-widest text-[10px]">
+                              <td colSpan={10} className="py-20 text-center text-slate-400 font-black uppercase tracking-widest text-[10px]">
                                 No archives found
                               </td>
                             </tr>
@@ -1304,6 +1360,17 @@ export default function App() {
                         <span className="text-2xl font-black italic">
                           {history.length > 0 ? (history.reduce((a, b) => a + b.fcr, 0) / history.length).toFixed(2) : '0.00'}
                         </span>
+                      </div>
+                      <div className="flex items-center justify-between border-t border-slate-700 pt-4">
+                        <span className="text-xs font-bold text-slate-400">Total Feed (All Time)</span>
+                        <div className="text-right">
+                          <p className="text-2xl font-black italic text-emerald-400">
+                             {history.reduce((a, b) => a + (b.dailyFeed || 0), 0).toLocaleString()} <span className="text-[10px]">KG</span>
+                          </p>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase">
+                            ≈ {(history.reduce((a, b) => a + (b.dailyFeed || 0), 0) / 50).toFixed(1)} SAK
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </div>
