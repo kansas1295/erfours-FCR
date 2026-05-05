@@ -480,7 +480,7 @@ export default function App() {
       <header className="h-16 bg-emerald-800 text-white flex items-center justify-between px-8 shrink-0 shadow-md">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-emerald-400 rounded-sm flex items-center justify-center font-bold text-emerald-900 text-lg italic">B</div>
-          <h1 className="text-xl font-bold tracking-tight uppercase">BroilerPro <span className="font-light opacity-80">Analytics v2.5</span></h1>
+          <h1 className="text-xl font-bold tracking-tight uppercase">Erfours BroilerPro</h1>
         </div>
         
         <nav className="flex items-center bg-emerald-900/50 rounded-lg p-1">
@@ -1382,7 +1382,7 @@ export default function App() {
         </div>
         <div className="flex gap-8">
           <span className="flex items-center gap-2 text-emerald-500"><span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> DB PERSISTED</span>
-          <span>&copy; {new Date().getFullYear()} BroilerPro Systems LP</span>
+          <span>&copy; {new Date().getFullYear()} Erfours BroilerPro Systems LP</span>
         </div>
       </footer>
     </div>
