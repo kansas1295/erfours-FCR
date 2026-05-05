@@ -491,6 +491,12 @@ export default function App() {
             Harian
           </button>
           <button 
+            onClick={() => setView('harvest')}
+            className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${view === 'harvest' ? 'bg-emerald-400 text-emerald-900 shadow-sm' : 'text-emerald-400 hover:text-white'}`}
+          >
+            Panen
+          </button>
+          <button 
             onClick={() => setView('cumulative')}
             className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${view === 'cumulative' ? 'bg-emerald-400 text-emerald-900 shadow-sm' : 'text-emerald-400 hover:text-white'}`}
           >
@@ -501,12 +507,6 @@ export default function App() {
             className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${view === 'history' ? 'bg-emerald-400 text-emerald-900 shadow-sm' : 'text-emerald-400 hover:text-white'}`}
           >
             Riwayat
-          </button>
-          <button 
-            onClick={() => setView('harvest')}
-            className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${view === 'harvest' ? 'bg-emerald-400 text-emerald-900 shadow-sm' : 'text-emerald-400 hover:text-white'}`}
-          >
-            Panen
           </button>
         </nav>
 
