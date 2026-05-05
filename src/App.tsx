@@ -498,7 +498,13 @@ export default function App() {
       {/* Header */}
       <header className="h-16 bg-emerald-800 text-white flex items-center justify-between px-8 shrink-0 shadow-md">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-emerald-400 rounded-sm flex items-center justify-center font-bold text-emerald-900 text-lg italic">B</div>
+          <div className="w-10 h-10 flex items-center justify-center">
+            <svg viewBox="0 0 40 40" className="w-full h-full drop-shadow-md" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M20 4L32 16L20 28L8 16L20 4Z" fill="#60a5fa" />
+              <path d="M20 12L32 24L20 36L8 24L20 12Z" fill="#2563eb" fillOpacity="0.9" />
+              <path d="M20 12L26 18L20 24L14 18L20 12Z" fill="white" fillOpacity="0.3" />
+            </svg>
+          </div>
           <h1 className="text-xl font-bold tracking-tight uppercase">Erfours BroilerPro</h1>
         </div>
         
@@ -1279,8 +1285,9 @@ export default function App() {
                             <th className="py-4 px-6 border-b border-slate-100">Pop Awal</th>
                             <th className="py-4 px-6 border-b border-slate-100">Pop Akhir</th>
                             <th className="py-4 px-6 border-b border-slate-100">Mati Harian</th>
-                            <th className="py-4 px-6 border-b border-slate-100">Mati Minggu</th>
-                            <th className="py-4 px-6 border-b border-slate-100">% Mort</th>
+                             <th className="py-4 px-6 border-b border-slate-100">Mati Minggu</th>
+                             <th className="py-4 px-6 border-b border-slate-100 text-rose-600">Total Mati</th>
+                             <th className="py-4 px-6 border-b border-slate-100">% Mort</th>
                             <th className="py-4 px-6 border-b border-slate-100 text-emerald-600">Total Pakan</th>
                             <th className="py-4 px-6 border-b border-slate-100 text-right">Action</th>
                           </tr>
@@ -1314,6 +1321,9 @@ export default function App() {
                               <td className="py-4 px-6 text-slate-900 font-black">{record.currentPop.toLocaleString()} <span className="text-[9px]">ekor</span></td>
                               <td className="py-4 px-6 text-rose-500 font-bold">{record.dailyDeaths?.toLocaleString() || 0} <span className="text-[9px]">ekor</span></td>
                               <td className="py-4 px-6 text-rose-600 font-bold">{record.weeklyDeaths?.toLocaleString() || 0} <span className="text-[9px]">ekor</span></td>
+                              <td className="py-4 px-6 text-rose-700 font-black">
+                                {history.filter(r => r.age <= record.age).reduce((sum, r) => sum + (r.dailyDeaths || 0), 0).toLocaleString()} <span className="text-[9px]">ekor</span>
+                              </td>
                               <td className="py-4 px-6 text-rose-600">{record.mortality.toFixed(2)}%</td>
                               <td className="py-4 px-6 text-emerald-700 font-black">
                                 {record.totalFeed.toFixed(1)} <span className="text-[9px]">kg</span>
@@ -1360,6 +1370,17 @@ export default function App() {
                         <span className="text-2xl font-black italic">
                           {history.length > 0 ? (history.reduce((a, b) => a + b.fcr, 0) / history.length).toFixed(2) : '0.00'}
                         </span>
+                      </div>
+                      <div className="flex items-center justify-between border-t border-slate-700 pt-4">
+                        <span className="text-xs font-bold text-slate-400">Total Mortality (Overall)</span>
+                        <div className="text-right">
+                          <p className="text-2xl font-black italic text-rose-400">
+                             {history.reduce((a, b) => a + (b.dailyDeaths || 0), 0).toLocaleString()} <span className="text-[10px]">EKOR</span>
+                          </p>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase">
+                            {initialPop ? ((history.reduce((a, b) => a + (b.dailyDeaths || 0), 0) / parseFloat(initialPop)) * 100).toFixed(2) : '0.00'} % TOTAL
+                          </p>
+                        </div>
                       </div>
                       <div className="flex items-center justify-between border-t border-slate-700 pt-4">
                         <span className="text-xs font-bold text-slate-400">Total Feed (All Time)</span>
