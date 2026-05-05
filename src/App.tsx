@@ -51,6 +51,17 @@ interface FlockRecord {
   weeklyDeaths?: number;
 }
 
+interface HarvestRecord {
+  id: string;
+  date: string;
+  birds: number;
+  avgWeight: number;
+  totalWeight: number;
+  age: number;
+  ip: number;
+  notes?: string;
+}
+
 export default function App() {
   // Input State
   const [initialPop, setInitialPop] = useState<string>('10000');
@@ -60,8 +71,9 @@ export default function App() {
   const [age, setAge] = useState<string>('35');
   
   // App State
-  const [view, setView] = useState<'daily' | 'cumulative' | 'history'>('daily');
+  const [view, setView] = useState<'daily' | 'cumulative' | 'history' | 'harvest'>('daily');
   const [history, setHistory] = useState<FlockRecord[]>([]);
+  const [harvestHistory, setHarvestHistory] = useState<HarvestRecord[]>([]);
   const [historySelectedWeek, setHistorySelectedWeek] = useState<number | null>(null);
 
   const availableWeeks = useMemo(() => {
@@ -111,6 +123,15 @@ export default function App() {
         console.error('Failed to load history', e);
       }
     }
+    
+    const savedHarvest = localStorage.getItem('broiler_harvest_history');
+    if (savedHarvest) {
+      try {
+        setHarvestHistory(JSON.parse(savedHarvest));
+      } catch (e) {
+        console.error('Failed to load harvest history', e);
+      }
+    }
   }, []);
 
   // Save history to localStorage
@@ -118,12 +139,28 @@ export default function App() {
     localStorage.setItem('broiler_history', JSON.stringify(history));
   }, [history]);
 
+  useEffect(() => {
+    localStorage.setItem('broiler_harvest_history', JSON.stringify(harvestHistory));
+  }, [harvestHistory]);
+
   // Daily Monitoring State
   const [dailyFeedSak, setDailyFeedSak] = useState<string>(''); // Sak (1 sak = 50kg)
   const [dailyWeight, setDailyWeight] = useState<string>(''); // gr/bird (Current weight)
   const [prevWeight, setPrevWeight] = useState<string>(''); // gr/bird (Yesterday's weight)
   const [dailyDeathsInput, setDailyDeathsInput] = useState<string>(''); // birds (Deaths today)
   const [dailyAge, setDailyAge] = useState<string>('');
+
+  // Harvest State
+  const [harvestBirds, setHarvestBirds] = useState<string>('');
+  const [harvestAvgWeight, setHarvestAvgWeight] = useState<string>('');
+  const [harvestTotalWeight, setHarvestTotalWeight] = useState<string>('');
+  const [harvestDate, setHarvestDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [harvestAge, setHarvestAge] = useState<string>('');
+
+  // Sync harvest age with main age if empty
+  useEffect(() => {
+    if (!harvestAge && age) setHarvestAge(age);
+  }, [age, harvestAge]);
 
   const stats = useMemo(() => {
     const p1 = parseFloat(initialPop) || 0;
@@ -262,6 +299,59 @@ export default function App() {
     }
   };
 
+  const deleteHarvestRecord = (id: string) => {
+    if (confirm('Hapus data panen ini?')) {
+      setHarvestHistory(prev => prev.filter(r => r.id !== id));
+    }
+  };
+
+  const saveHarvest = () => {
+    const b = parseFloat(harvestBirds) || 0;
+    const aw = parseFloat(harvestAvgWeight) || 0;
+    const tw = parseFloat(harvestTotalWeight) || 0;
+    const hAge = parseFloat(harvestAge) || parseFloat(age) || 0;
+
+    if (b <= 0 || (aw <= 0 && tw <= 0) || hAge <= 0) {
+      alert('Mohon lengkapi data panen dan umur harian.');
+      return;
+    }
+
+    // Auto calculate if one is missing
+    let finalTw = tw;
+    let finalAw = aw;
+
+    if (tw === 0 && aw > 0) finalTw = b * aw / 1000;
+    if (aw === 0 && tw > 0) finalAw = (tw * 1000) / b;
+
+    // Calculate IP for this specific harvest
+    // Using current flock FCR and Mortality if available, 
+    // or deriving it from current total stats
+    const currentFcr = stats ? parseFloat(stats.fcr) : 0;
+    const currentMortality = stats ? parseFloat(stats.mortality) : 0;
+    
+    // IP = ((100 - Mortality) * AvgWeightKG) / (FCR * Age) * 100
+    const avgWeightKg = finalAw / 1000;
+    const calculatedIp = (currentFcr > 0 && hAge > 0) 
+      ? (((100 - currentMortality) * avgWeightKg) / (currentFcr * hAge)) * 100 
+      : 0;
+
+    const newRecord: HarvestRecord = {
+      id: crypto.randomUUID(),
+      date: harvestDate,
+      birds: b,
+      avgWeight: finalAw,
+      totalWeight: finalTw,
+      age: hAge,
+      ip: calculatedIp
+    };
+
+    setHarvestHistory(prev => [newRecord, ...prev]);
+    setHarvestBirds('');
+    setHarvestAvgWeight('');
+    setHarvestTotalWeight('');
+    alert('Data panen berhasil disimpan dengan Indeks Performa.');
+  };
+
   const exportToCSV = () => {
     if (history.length === 0) {
       alert('Belum ada data untuk diekspor.');
@@ -362,6 +452,12 @@ export default function App() {
             className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${view === 'history' ? 'bg-emerald-400 text-emerald-900 shadow-sm' : 'text-emerald-400 hover:text-white'}`}
           >
             Riwayat
+          </button>
+          <button 
+            onClick={() => setView('harvest')}
+            className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${view === 'harvest' ? 'bg-emerald-400 text-emerald-900 shadow-sm' : 'text-emerald-400 hover:text-white'}`}
+          >
+            Panen
           </button>
         </nav>
 
@@ -690,6 +786,188 @@ export default function App() {
                       </div>
                     </div>
                   </div>
+                </div>
+              </section>
+            </motion.div>
+          ) : view === 'harvest' ? (
+            <motion.div 
+              key="harvest"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="h-full flex flex-col md:flex-row p-6 gap-6 overflow-hidden"
+            >
+              <section className="w-full md:w-96 bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col gap-6 shrink-0">
+                <div className="space-y-6">
+                  <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+                    <Beef size={18} className="text-emerald-600" />
+                    <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest">Input Data Panen</h2>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight">Tanggal Panen</label>
+                      <input 
+                        type="date" 
+                        value={harvestDate} 
+                        onChange={(e) => setHarvestDate(e.target.value)} 
+                        className="w-full border border-slate-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-lg font-black" 
+                      />
+                    </div>
+                    
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight">Umur Panen (Hari)</label>
+                      <div className="relative">
+                        <input 
+                          type="number" 
+                          value={harvestAge} 
+                          onChange={(e) => setHarvestAge(e.target.value)} 
+                          className="w-full border border-slate-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-lg font-black tracking-tighter" 
+                        />
+                        <span className="absolute right-3 top-2.5 text-slate-400 text-[10px] font-black uppercase">HARI</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight">Jumlah Ekor Ayam</label>
+                      <div className="relative">
+                        <input 
+                          type="number" 
+                          value={harvestBirds} 
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setHarvestBirds(val);
+                            const b = parseFloat(val) || 0;
+                            const aw = parseFloat(harvestAvgWeight) || 0;
+                            const tw = parseFloat(harvestTotalWeight) || 0;
+                            
+                            if (b > 0) {
+                              if (aw > 0) {
+                                setHarvestTotalWeight((b * aw / 1000).toFixed(2));
+                              } else if (tw > 0) {
+                                setHarvestAvgWeight((tw * 1000 / b).toFixed(0));
+                              }
+                            }
+                          }} 
+                          className="w-full border border-slate-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-lg font-black tracking-tighter" 
+                        />
+                        <span className="absolute right-3 top-2.5 text-slate-400 text-[10px] font-black uppercase">EKOR</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight">Rata-rata Bobot (gr/ekor)</label>
+                      <div className="relative">
+                        <input 
+                          type="number" 
+                          value={harvestAvgWeight} 
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setHarvestAvgWeight(val);
+                            const b = parseFloat(harvestBirds) || 0;
+                            const aw = parseFloat(val) || 0;
+                            if (b > 0 && aw > 0) {
+                              setHarvestTotalWeight((b * aw / 1000).toFixed(2));
+                            }
+                          }} 
+                          className="w-full border border-slate-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-lg font-black tracking-tighter" 
+                        />
+                        <span className="absolute right-3 top-2.5 text-slate-400 text-[10px] font-black uppercase">GRAM</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight">Total Bobot Panen (kg)</label>
+                      <div className="relative">
+                        <input 
+                          type="number" 
+                          value={harvestTotalWeight} 
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setHarvestTotalWeight(val);
+                            const b = parseFloat(harvestBirds) || 0;
+                            const tw = parseFloat(val) || 0;
+                            if (b > 0 && tw > 0) {
+                               setHarvestAvgWeight((tw * 1000 / b).toFixed(0));
+                            }
+                          }} 
+                          className="w-full border border-slate-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-lg font-black tracking-tighter" 
+                        />
+                        <span className="absolute right-3 top-2.5 text-slate-400 text-[10px] font-black uppercase">KG</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={saveHarvest}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 px-4 rounded-lg flex items-center justify-center gap-2 text-[10px] uppercase tracking-[0.2em] transition-all shadow-lg active:scale-95"
+                  >
+                    <Save size={14} /> Simpan Data Panen
+                  </button>
+                </div>
+              </section>
+
+              <section className="flex-1 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
+                  <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Riwayat Panen Per Hari</h4>
+                  <div className="text-right">
+                    <p className="text-[10px] font-black text-slate-400 uppercase">Total Birds: <span className="text-slate-900">{harvestHistory.reduce((s, r) => s + r.birds, 0).toLocaleString()}</span></p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase">Total Mass: <span className="text-slate-900">{harvestHistory.reduce((s, r) => s + r.totalWeight, 0).toFixed(1)} KG</span></p>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-50/50 text-[9px] uppercase font-black tracking-widest text-slate-400">
+                      <tr>
+                        <th className="py-4 px-6 border-b border-slate-100">Tanggal</th>
+                        <th className="py-4 px-6 border-b border-slate-100">Umur</th>
+                        <th className="py-4 px-6 border-b border-slate-100">Jumlah Ekor</th>
+                        <th className="py-4 px-6 border-b border-slate-100">Rata-rata Bobot</th>
+                        <th className="py-4 px-6 border-b border-slate-100">Total Bobot (kg)</th>
+                        <th className="py-4 px-6 border-b border-slate-100 font-black text-emerald-600">IP PANEN</th>
+                        <th className="py-4 px-6 border-b border-slate-100 text-right">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-sm font-bold text-slate-600">
+                      {harvestHistory.map((record) => (
+                        <tr key={record.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                          <td className="py-4 px-6">
+                            <div className="flex items-center gap-2">
+                              <Calendar size={12} className="text-slate-400" />
+                              {record.date}
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">{record.age} <span className="text-[9px]">hari</span></td>
+                          <td className="py-4 px-6 text-slate-900 font-black">{record.birds.toLocaleString()} <span className="text-[9px]">ekor</span></td>
+                          <td className="py-4 px-6">{record.avgWeight.toFixed(0)} <span className="text-[9px]">gr</span></td>
+                          <td className="py-4 px-6 text-slate-600">{record.totalWeight.toFixed(2)} <span className="text-[9px]">kg</span></td>
+                          <td className="py-4 px-6">
+                             <div className="flex flex-col">
+                               <span className="text-emerald-700 font-black text-lg">{record.ip.toFixed(1)}</span>
+                               <span className="text-[8px] font-black uppercase text-slate-400 -mt-1">
+                                 {record.ip >= 400 ? 'PREMIUM' : record.ip >= 350 ? 'EXCELLENT' : record.ip >= 300 ? 'STANDARD' : 'UNDER'}
+                               </span>
+                             </div>
+                          </td>
+                          <td className="py-4 px-6 text-right">
+                            <button 
+                              onClick={() => deleteHarvestRecord(record.id)}
+                              className="p-2 text-slate-300 hover:text-rose-600 transition-colors"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {harvestHistory.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="py-20 text-center text-slate-400 font-black uppercase tracking-widest text-[10px]">
+                            Belum ada data panen
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </section>
             </motion.div>
