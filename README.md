@@ -28,6 +28,6 @@ Dasbor kami menyajikan metrik kritikal dalam satu layar:
 
 ## 🏁 Cara Memulai
 
-1. **Akses Aplikasi**: Buka aplikasi melalui browser.
+1. **Akses Aplikasi**: Kunjungi link [monitoring IP](https://ais-pre-ozxs4u3odnjhv6pzepfzzf-177008679896.asia-southeast1.run.app)
 2. **Input Data**: Masukkan jumlah pakan yang dihabiskan, jumlah kematian, dan berat rata-rata sampel setiap sore.
 3. **Evaluasi**: Pantau grafik dan nilai IP untuk melihat performa kandang Anda secara langsung.
