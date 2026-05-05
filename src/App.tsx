@@ -161,11 +161,12 @@ export default function App() {
   useEffect(() => {
     if (!harvestAge && (dailyAge || age)) setHarvestAge(dailyAge || age);
     if (!harvestAvgWeight && dailyWeight) {
-      setHarvestAvgWeight(dailyWeight);
+      const weightInKg = (parseFloat(dailyWeight) / 1000).toFixed(3);
+      setHarvestAvgWeight(weightInKg);
       const b = parseFloat(harvestBirds) || 0;
-      const aw = parseFloat(dailyWeight) || 0;
+      const aw = parseFloat(weightInKg) || 0;
       if (b > 0 && aw > 0) {
-        setHarvestTotalWeight((b * aw / 1000).toFixed(2));
+        setHarvestTotalWeight((b * aw).toFixed(2));
       }
     }
   }, [age, harvestAge, dailyAge, dailyWeight, harvestAvgWeight, harvestBirds]);
@@ -328,8 +329,8 @@ export default function App() {
     let finalTw = tw;
     let finalAw = aw;
 
-    if (tw === 0 && aw > 0) finalTw = b * aw / 1000;
-    if (aw === 0 && tw > 0) finalAw = (tw * 1000) / b;
+    if (tw === 0 && aw > 0) finalTw = b * aw;
+    if (aw === 0 && tw > 0) finalAw = tw / b;
 
     // Calculate IP for this specific harvest
     // Using current flock FCR and Mortality if available, 
@@ -338,7 +339,7 @@ export default function App() {
     const currentMortality = stats ? parseFloat(stats.mortality) : 0;
     
     // IP = ((100 - Mortality) * AvgWeightKG) / (FCR * Age) * 100
-    const avgWeightKg = finalAw / 1000;
+    const avgWeightKg = finalAw;
     const calculatedIp = (currentFcr > 0 && hAge > 0) 
       ? (((100 - currentMortality) * avgWeightKg) / (currentFcr * hAge)) * 100 
       : 0;
@@ -370,7 +371,7 @@ export default function App() {
       'Tanggal',
       'Umur (Hari)',
       'Jumlah Ekor (Ekor)',
-      'Rata-rata Bobot (gr)',
+      'Rata-rata Bobot (kg)',
       'Total Bobot (kg)',
       'Indeks Performa (IP)'
     ];
@@ -379,7 +380,7 @@ export default function App() {
       r.date,
       r.age,
       r.birds,
-      r.avgWeight.toFixed(0),
+      r.avgWeight.toFixed(3),
       r.totalWeight.toFixed(2),
       r.ip.toFixed(2)
     ]);
@@ -891,9 +892,9 @@ export default function App() {
                             
                             if (b > 0) {
                               if (aw > 0) {
-                                setHarvestTotalWeight((b * aw / 1000).toFixed(2));
+                                setHarvestTotalWeight((b * aw).toFixed(2));
                               } else if (tw > 0) {
-                                setHarvestAvgWeight((tw * 1000 / b).toFixed(0));
+                                setHarvestAvgWeight((tw / b).toFixed(3));
                               }
                             }
                           }} 
@@ -904,11 +905,12 @@ export default function App() {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="block text-[10px] font-black text-rose-500 uppercase tracking-tight">Bobot Rata-rata Panen (gr/ekor)</label>
+                      <label className="block text-[10px] font-black text-rose-500 uppercase tracking-tight">Bobot Rata-rata Panen (kg/ekor)</label>
                       <div className="relative">
                         <input 
                           type="number" 
-                          placeholder="0"
+                          placeholder="0.00"
+                          step="0.01"
                           value={harvestAvgWeight} 
                           onChange={(e) => {
                             const val = e.target.value;
@@ -916,12 +918,12 @@ export default function App() {
                             const b = parseFloat(harvestBirds) || 0;
                             const aw = parseFloat(val) || 0;
                             if (b > 0 && aw > 0) {
-                              setHarvestTotalWeight((b * aw / 1000).toFixed(2));
+                              setHarvestTotalWeight((b * aw).toFixed(2));
                             }
                           }} 
                           className="w-full border border-slate-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-lg font-black tracking-tighter" 
                         />
-                        <span className="absolute right-3 top-2.5 text-slate-400 text-[10px] font-black uppercase">gr/ekor</span>
+                        <span className="absolute right-3 top-2.5 text-slate-400 text-[10px] font-black uppercase">kg/ekor</span>
                       </div>
                     </div>
 
@@ -938,7 +940,7 @@ export default function App() {
                             const b = parseFloat(harvestBirds) || 0;
                             const tw = parseFloat(val) || 0;
                             if (b > 0 && tw > 0) {
-                               setHarvestAvgWeight((tw * 1000 / b).toFixed(0));
+                               setHarvestAvgWeight((tw / b).toFixed(3));
                             }
                           }} 
                           className="w-full border border-slate-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-lg font-black tracking-tighter" 
@@ -983,9 +985,9 @@ export default function App() {
                         {(() => {
                           const totalB = harvestHistory.reduce((s, r) => s + r.birds, 0);
                           const totalW = harvestHistory.reduce((s, r) => s + r.totalWeight, 0);
-                          return totalB > 0 ? (totalW * 1000 / totalB).toFixed(0) : '0';
+                          return totalB > 0 ? (totalW / totalB).toFixed(3) : '0.000';
                         })()}
-                        <span className="text-[9px] text-slate-400 ml-1">GR/EKOR</span>
+                        <span className="text-[9px] text-slate-400 ml-1">KG/EKOR</span>
                       </p>
                     </div>
                     <div className="flex flex-col border-l border-slate-100 pl-6">
@@ -1023,7 +1025,7 @@ export default function App() {
                           </td>
                           <td className="py-4 px-6">{record.age} <span className="text-[9px]">hari</span></td>
                           <td className="py-4 px-6 text-slate-900 font-black">{record.birds.toLocaleString()} <span className="text-[9px]">ekor</span></td>
-                          <td className="py-4 px-6">{record.avgWeight.toFixed(0)} <span className="text-[9px]">gr</span></td>
+                          <td className="py-4 px-6">{record.avgWeight.toFixed(3)} <span className="text-[9px]">kg</span></td>
                           <td className="py-4 px-6 text-slate-600">{record.totalWeight.toFixed(2)} <span className="text-[9px]">kg</span></td>
                           <td className="py-4 px-6">
                              <div className="flex flex-col">
