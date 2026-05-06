@@ -1322,7 +1322,7 @@ export default function App() {
                               <td className="py-4 px-6 text-rose-500 font-bold">{record.dailyDeaths?.toLocaleString() || 0} <span className="text-[9px]">ekor</span></td>
                               <td className="py-4 px-6 text-rose-600 font-bold">{record.weeklyDeaths?.toLocaleString() || 0} <span className="text-[9px]">ekor</span></td>
                               <td className="py-4 px-6 text-rose-700 font-black">
-                                {history.filter(r => r.age <= record.age).reduce((sum, r) => sum + (r.dailyDeaths || 0), 0).toLocaleString()} <span className="text-[9px]">ekor</span>
+                                {(record.totalDeaths || 0).toLocaleString()} <span className="text-[9px]">ekor</span>
                               </td>
                               <td className="py-4 px-6 text-rose-600">{record.mortality.toFixed(2)}%</td>
                               <td className="py-4 px-6 text-emerald-700 font-black">
@@ -1375,10 +1375,10 @@ export default function App() {
                         <span className="text-xs font-bold text-slate-400">Total Mortality (Overall)</span>
                         <div className="text-right">
                           <p className="text-2xl font-black italic text-rose-400">
-                             {history.reduce((a, b) => a + (b.dailyDeaths || 0), 0).toLocaleString()} <span className="text-[10px]">EKOR</span>
+                             {history.length > 0 ? (history[0].totalDeaths || 0).toLocaleString() : '0'} <span className="text-[10px]">EKOR</span>
                           </p>
                           <p className="text-[10px] font-bold text-slate-500 uppercase">
-                            {initialPop ? ((history.reduce((a, b) => a + (b.dailyDeaths || 0), 0) / parseFloat(initialPop)) * 100).toFixed(2) : '0.00'} % TOTAL
+                            {history.length > 0 ? history[0].mortality.toFixed(2) : '0.00'} % TOTAL
                           </p>
                         </div>
                       </div>
@@ -1386,10 +1386,10 @@ export default function App() {
                         <span className="text-xs font-bold text-slate-400">Total Feed (All Time)</span>
                         <div className="text-right">
                           <p className="text-2xl font-black italic text-emerald-400">
-                             {history.reduce((a, b) => a + (b.dailyFeed || 0), 0).toLocaleString()} <span className="text-[10px]">KG</span>
+                             {history.length > 0 ? history[0].totalFeed.toLocaleString() : '0'} <span className="text-[10px]">KG</span>
                           </p>
                           <p className="text-[10px] font-bold text-slate-500 uppercase">
-                            ≈ {(history.reduce((a, b) => a + (b.dailyFeed || 0), 0) / 50).toFixed(1)} SAK
+                            ≈ {history.length > 0 ? (history[0].totalFeed / 50).toFixed(1) : '0.0'} SAK
                           </p>
                         </div>
                       </div>
