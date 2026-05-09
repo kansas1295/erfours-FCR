@@ -86,32 +86,60 @@ export default function App() {
 
   const historyWeeklyMortality = useMemo(() => {
     if (!activeHistoryWeek) return 0;
-    return history
-      .filter(r => Math.ceil(r.age / 7) === activeHistoryWeek)
-      .reduce((sum, r) => sum + (r.dailyDeaths || 0), 0);
+    const sorted = [...history].sort((a, b) => a.age - b.age);
+    const weekLastRecord = sorted.filter(r => Math.ceil(r.age / 7) === activeHistoryWeek).pop();
+    const prevWeekLastRecord = sorted.filter(r => Math.ceil(r.age / 7) < activeHistoryWeek).pop();
+    
+    if (!weekLastRecord) return 0;
+    
+    const currentTotalDeaths = weekLastRecord.totalDeaths || (weekLastRecord.initialPop - weekLastRecord.currentPop);
+    const prevTotalDeaths = prevWeekLastRecord ? (prevWeekLastRecord.totalDeaths || (prevWeekLastRecord.initialPop - prevWeekLastRecord.currentPop)) : 0;
+    
+    return currentTotalDeaths - prevTotalDeaths;
   }, [history, activeHistoryWeek]);
 
   const historyWeeklyFeed = useMemo(() => {
     if (!activeHistoryWeek) return 0;
-    return history
-      .filter(r => Math.ceil(r.age / 7) === activeHistoryWeek)
-      .reduce((sum, r) => sum + (r.dailyFeed || 0), 0);
+    const sorted = [...history].sort((a, b) => a.age - b.age);
+    const weekLastRecord = sorted.filter(r => Math.ceil(r.age / 7) === activeHistoryWeek).pop();
+    const prevWeekLastRecord = sorted.filter(r => Math.ceil(r.age / 7) < activeHistoryWeek).pop();
+    
+    if (!weekLastRecord) return 0;
+    
+    const currentTotalFeed = weekLastRecord.totalFeed;
+    const prevTotalFeed = prevWeekLastRecord ? prevWeekLastRecord.totalFeed : 0;
+    
+    return currentTotalFeed - prevTotalFeed;
   }, [history, activeHistoryWeek]);
 
   const weeklySummaryData = useMemo(() => {
     const summary: Record<number, { deaths: number; feed: number }> = {};
-    history.forEach(r => {
-      const week = Math.ceil(r.age / 7);
-      if (!summary[week]) {
-        summary[week] = { deaths: 0, feed: 0 };
+    
+    // Sort history by age to correctly identify week-over-week changes
+    const sortedHistory = [...history].sort((a, b) => a.age - b.age);
+    
+    availableWeeks.forEach(week => {
+      const weekLastRecord = sortedHistory.filter(r => Math.ceil(r.age / 7) === week).pop();
+      const prevWeekLastRecord = sortedHistory.filter(r => Math.ceil(r.age / 7) < week).pop();
+      
+      if (weekLastRecord) {
+        const currentTotalFeed = weekLastRecord.totalFeed;
+        const prevTotalFeed = prevWeekLastRecord ? prevWeekLastRecord.totalFeed : 0;
+        
+        const currentTotalDeaths = weekLastRecord.totalDeaths || (weekLastRecord.initialPop - weekLastRecord.currentPop);
+        const prevTotalDeaths = prevWeekLastRecord ? (prevWeekLastRecord.totalDeaths || (prevWeekLastRecord.initialPop - prevWeekLastRecord.currentPop)) : 0;
+        
+        summary[week] = {
+          feed: currentTotalFeed - prevTotalFeed,
+          deaths: currentTotalDeaths - prevTotalDeaths
+        };
       }
-      summary[week].deaths += (r.dailyDeaths || 0);
-      summary[week].feed += (r.dailyFeed || 0);
     });
+
     return Object.entries(summary)
       .map(([week, data]) => ({ week: parseInt(week), ...data }))
       .sort((a, b) => b.week - a.week);
-  }, [history]);
+  }, [history, availableWeeks]);
 
   // Load history from localStorage on mount
   useEffect(() => {
@@ -171,6 +199,22 @@ export default function App() {
     }
   }, [age, harvestAge, dailyAge, dailyWeight, harvestAvgWeight, harvestBirds]);
 
+  // Auto-fetch previous weight from history
+  useEffect(() => {
+    const currentDay = parseFloat(dailyAge || age) || 0;
+    if (currentDay > 0 && !prevWeight && history.length > 0) {
+      // Find the record for the most recent day before current day
+      const prevRecord = [...history]
+        .filter(r => r.age < currentDay)
+        .sort((a, b) => b.age - a.age)[0];
+      
+      if (prevRecord) {
+        const weightKg = prevRecord.totalWeight / prevRecord.currentPop;
+        setPrevWeight(Math.round(weightKg * 1000).toString());
+      }
+    }
+  }, [dailyAge, age, history, prevWeight]);
+
   const stats = useMemo(() => {
     const p1 = parseFloat(initialPop) || 0;
     const p2 = parseFloat(currentPop) || 0;
@@ -183,12 +227,12 @@ export default function App() {
     const currentWeek = Math.ceil(currentDay / 7);
     
     // Derived from history - specifically for records PRIOR to the current age being viewed
-    const histFeedBeforeToday = history
+    const lastRecordBeforeToday = [...history]
       .filter(r => r.age < currentDay)
-      .reduce((sum, r) => sum + (r.dailyFeed || 0), 0);
-    const histDeathsBeforeToday = history
-      .filter(r => r.age < currentDay)
-      .reduce((sum, r) => sum + (r.dailyDeaths || 0), 0);
+      .sort((a, b) => b.age - a.age)[0];
+    
+    const histFeedBeforeToday = lastRecordBeforeToday ? lastRecordBeforeToday.totalFeed : 0;
+    const histDeathsBeforeToday = lastRecordBeforeToday ? (lastRecordBeforeToday.initialPop - lastRecordBeforeToday.currentPop) : 0;
     
     const openingPopToday = p1 - histDeathsBeforeToday;
     const pp = openingPopToday;
@@ -226,14 +270,23 @@ export default function App() {
     const dailyDeaths = (pp > 0 && p2 > 0) ? (pp - p2) : 0;
     const dailyMortalityRate = (pp > 0) ? (dailyDeaths / pp) * 100 : 0;
 
-    const historyWeekExcludingToday = history.filter(r => 
-      Math.ceil(r.age / 7) === currentWeek && r.age !== currentDay
-    );
+    // Weekly Calculations (End of week logic)
+    const endOfWeekToday = Math.ceil(currentDay / 7) * 7;
+    const startOfWeekToday = endOfWeekToday - 6;
 
-    const weeklyDeathsHistory = historyWeekExcludingToday.reduce((sum, r) => sum + (r.dailyDeaths || 0), 0);
-    const totalWeeklyDeaths = weeklyDeathsHistory + dailyDeaths;
+    const findLastRecordBeforeWeek = (weekNum: number) => {
+      const weekStartTime = (weekNum - 1) * 7 + 1;
+      return [...history]
+        .filter(r => r.age < weekStartTime)
+        .sort((a, b) => b.age - a.age)[0];
+    };
 
-    const statsWeeklyFeed = historyWeekExcludingToday.reduce((sum, r) => sum + (r.dailyFeed || 0), 0) + df;
+    const prevWeekRecord = findLastRecordBeforeWeek(currentWeek);
+    const feedAtStartOfWeek = prevWeekRecord ? prevWeekRecord.totalFeed : 0;
+    const deathsAtStartOfWeek = prevWeekRecord ? (prevWeekRecord.totalDeaths ?? (prevWeekRecord.initialPop - prevWeekRecord.currentPop)) : 0;
+
+    const statsWeeklyFeed = fValue - feedAtStartOfWeek;
+    const totalWeeklyDeaths = (p1 - p2) - deathsAtStartOfWeek;
 
     const getIpStatus = (val: number) => {
       if (val >= 400) return 'PREMIUM GRADE';
@@ -258,15 +311,15 @@ export default function App() {
       statusType: getStatusType(ip),
       feedEfficiency: fcr > 0 ? ((1 / fcr) * 100).toFixed(1) : '0',
       dailyFcr,
-      adg: cumulativeAdg.toFixed(1),
-      dailyAdg: currentDailyAdg > 0 ? currentDailyAdg.toFixed(1) : null,
+      adg: Math.round(cumulativeAdg).toString(),
+      dailyAdg: currentDailyAdg > 0 ? Math.round(currentDailyAdg).toString() : null,
       dailyMortality: dailyMortalityRate.toFixed(3),
       dailyDeaths,
       weeklyDeaths: totalWeeklyDeaths,
-      weeklyFeed: statsWeeklyFeed.toFixed(1),
+      weeklyFeed: Math.round(statsWeeklyFeed).toLocaleString(),
       weeklyFeedRaw: statsWeeklyFeed, // for SAK calculation
-      cumulativeFeed: fValue.toFixed(1),
-      cumulativeWeight: wValue.toFixed(1),
+      cumulativeFeed: Math.round(fValue).toLocaleString(),
+      cumulativeWeight: Math.round(wValue).toLocaleString(),
       currentWeek: currentWeek || '-'
     };
   }, [initialPop, currentPop, totalWeight, totalFeed, age, dailyFeedSak, dailyWeight, prevWeight, history, dailyAge]);
@@ -284,7 +337,7 @@ export default function App() {
     setDailyAge('');
   };
 
-  const saveFlock = () => {
+  const saveRecord = () => {
     if (!stats) return;
     
     // Choose the appropriate age based on input context
@@ -293,27 +346,58 @@ export default function App() {
     const p1 = parseFloat(initialPop) || 0;
     const p2 = parseFloat(currentPop) || 0;
     
-    // Use the smarter derived values from stats if available
-    const f = stats ? parseFloat(stats.cumulativeFeed) : (parseFloat(totalFeed) || 0);
+    const currentDay = finalAge;
+    const prevRecord = [...history]
+      .filter(r => r.age < currentDay)
+      .sort((a, b) => b.age - a.age)[0];
+    
+    const prevTotalFeed = prevRecord ? prevRecord.totalFeed : 0;
+    const prevPop = prevRecord ? prevRecord.currentPop : p1;
+    const prevTotalDeaths = prevRecord ? (prevRecord.totalDeaths ?? (prevRecord.initialPop - prevRecord.currentPop)) : 0;
+
+    let f = 0;
+    let dailyF = 0;
+    let d = 0;
+    let dailyD = 0;
+
+    // Smartly derive values based on active view to maintain sync
+    if (view === 'daily') {
+      dailyF = (parseFloat(dailyFeedSak) || 0) * 50;
+      f = prevTotalFeed + dailyF;
+      dailyD = parseFloat(dailyDeathsInput) || 0;
+      d = prevTotalDeaths + dailyD;
+    } else if (view === 'cumulative') {
+      f = parseFloat(totalFeed) || 0;
+      dailyF = f - prevTotalFeed;
+      d = p1 - p2;
+      dailyD = d - prevTotalDeaths;
+    } else {
+      // Fallback
+      f = stats ? parseFloat(stats.cumulativeFeed) : (parseFloat(totalFeed) || 0);
+      dailyF = (parseFloat(dailyFeedSak) || 0) * 50;
+      d = p1 - p2;
+      dailyD = stats.dailyDeaths;
+    }
+
     const w = stats ? parseFloat(stats.cumulativeWeight) : (parseFloat(totalWeight) || 0);
 
     const newRecord: FlockRecord = {
       id: crypto.randomUUID(),
       date: new Date().toISOString(),
+      age: finalAge,
       initialPop: p1,
       currentPop: p2,
       totalWeight: w,
       totalFeed: f,
-      age: finalAge,
       fcr: parseFloat(stats.fcr),
       ip: parseFloat(stats.ip),
       mortality: parseFloat(stats.mortality),
       dailyFcr: stats.dailyFcr ? parseFloat(stats.dailyFcr) : null,
       adg: parseFloat(stats.adg),
       dailyAdg: stats.dailyAdg ? parseFloat(stats.dailyAdg.toString()) : null,
-      dailyDeaths: stats.dailyDeaths,
-      dailyFeed: (parseFloat(dailyFeedSak) || 0) * 50,
-      totalDeaths: p1 - p2,
+      dailyDeaths: dailyD,
+      dailyFeed: dailyF,
+      totalDeaths: d,
       weeklyDeaths: stats.weeklyDeaths
     };
 
@@ -628,8 +712,11 @@ export default function App() {
                             const val = e.target.value;
                             setDailyDeathsInput(val);
                             
+                            const currentDay = parseFloat(dailyAge || age) || 0;
                             const p1 = parseFloat(initialPop) || 0;
-                            const histDeaths = history.reduce((sum, r) => sum + (r.dailyDeaths || 0), 0);
+                            const histDeaths = history
+                              .filter(r => r.age < currentDay)
+                              .reduce((sum, r) => sum + (r.dailyDeaths || 0), 0);
                             const d = parseFloat(val) || 0;
                             if (p1 > 0) {
                               const c = p1 - histDeaths - d;
@@ -652,8 +739,11 @@ export default function App() {
                             const val = e.target.value;
                             setCurrentPop(val);
                             
+                            const currentDay = parseFloat(dailyAge || age) || 0;
                             const p1 = parseFloat(initialPop) || 0;
-                            const histDeaths = history.reduce((sum, r) => sum + (r.dailyDeaths || 0), 0);
+                            const histDeaths = history
+                               .filter(r => r.age < currentDay)
+                               .reduce((sum, r) => sum + (r.dailyDeaths || 0), 0);
                             const openingPopToday = p1 - histDeaths;
                             
                             const c = parseFloat(val) || 0;
@@ -670,7 +760,7 @@ export default function App() {
                   
                   <div className="mt-auto pt-4 border-t border-slate-100">
                     <button 
-                      onClick={saveFlock} 
+                      onClick={saveRecord} 
                       disabled={!stats}
                       className={`w-full ${stats ? 'bg-emerald-600 hover:bg-emerald-700 active:scale-95 shadow-md shadow-emerald-500/20' : 'bg-slate-200 text-slate-400 cursor-not-allowed'} text-white font-black py-4 px-4 rounded-lg flex items-center justify-center gap-2 text-[10px] uppercase tracking-[0.2em] transition-all`}
                     >
@@ -851,7 +941,7 @@ export default function App() {
                 </div>
                 <div className="mt-auto space-y-3 pt-6 border-t border-slate-100">
                   <button 
-                    onClick={saveFlock} 
+                    onClick={saveRecord} 
                     disabled={!stats}
                     className={`w-full ${stats ? 'bg-slate-900 hover:bg-black active:scale-95 shadow-xl' : 'bg-slate-200 text-slate-400 cursor-not-allowed'} text-white font-black py-4 px-4 rounded-lg flex items-center justify-center gap-2 text-[10px] uppercase tracking-[0.2em] transition-all`}
                   >
@@ -1062,6 +1152,7 @@ export default function App() {
                   <table className="w-full text-left border-collapse">
                     <thead className="bg-slate-50/50 text-[9px] uppercase font-black tracking-widest text-slate-400">
                       <tr>
+                        <th className="py-4 px-6 border-b border-slate-100 w-12 text-center">No</th>
                         <th className="py-4 px-6 border-b border-slate-100">Tanggal</th>
                         <th className="py-4 px-6 border-b border-slate-100">Umur</th>
                         <th className="py-4 px-6 border-b border-slate-100">Jumlah Ekor</th>
@@ -1072,8 +1163,11 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody className="text-sm font-bold text-slate-600">
-                      {harvestHistory.map((record) => (
+                      {harvestHistory.map((record, idx) => (
                         <tr key={record.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                          <td className="py-4 px-6 text-center text-slate-400 font-mono text-[10px]">
+                            {harvestHistory.length - idx}
+                          </td>
                           <td className="py-4 px-6">
                             <div className="flex items-center gap-2">
                               <Calendar size={12} className="text-slate-400" />
@@ -1104,7 +1198,7 @@ export default function App() {
                       ))}
                       {harvestHistory.length === 0 && (
                         <tr>
-                          <td colSpan={5} className="py-20 text-center text-slate-400 font-black uppercase tracking-widest text-[10px]">
+                          <td colSpan={8} className="py-20 text-center text-slate-400 font-black uppercase tracking-widest text-[10px]">
                             Belum ada data panen
                           </td>
                         </tr>
@@ -1268,33 +1362,50 @@ export default function App() {
                         </div>
                       )}
 
-                      <button 
-                        onClick={exportToCSV}
-                        className="text-[10px] font-black text-emerald-600 flex items-center gap-2 hover:bg-emerald-50 px-3 py-1.5 rounded-lg transition-colors border border-emerald-100"
-                      >
-                        <Download size={14} /> EXPORT CSV
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => {
+                            if (window.confirm('Hapus semua riwayat flock? Tindakan ini tidak dapat dibatalkan.')) {
+                              setHistory([]);
+                              localStorage.removeItem('flock_history');
+                            }
+                          }}
+                          className="text-[10px] font-black text-rose-600 flex items-center gap-2 hover:bg-rose-50 px-3 py-1.5 rounded-lg transition-colors border border-rose-100"
+                        >
+                          CLEAR ALL
+                        </button>
+                        <button 
+                          onClick={exportToCSV}
+                          className="text-[10px] font-black text-emerald-600 flex items-center gap-2 hover:bg-emerald-50 px-3 py-1.5 rounded-lg transition-colors border border-emerald-100"
+                        >
+                          <Download size={14} /> EXPORT CSV
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex-1 overflow-y-auto">
+                    <div className="h-[500px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
                       <table className="w-full text-left border-collapse">
-                        <thead className="bg-slate-50/50 text-[9px] uppercase font-black tracking-widest text-slate-400">
+                        <thead className="bg-slate-50 text-[9px] uppercase font-black tracking-widest text-slate-400 sticky top-0 z-20 shadow-sm">
                           <tr>
-                            <th className="py-4 px-6 border-b border-slate-100">Date/ID</th>
-                            <th className="py-4 px-6 border-b border-slate-100">IP</th>
-                            <th className="py-4 px-6 border-b border-slate-100">FCR (C/D)</th>
-                            <th className="py-4 px-6 border-b border-slate-100">Pop Awal</th>
-                            <th className="py-4 px-6 border-b border-slate-100">Pop Akhir</th>
-                            <th className="py-4 px-6 border-b border-slate-100">Mati Harian</th>
-                             <th className="py-4 px-6 border-b border-slate-100">Mati Minggu</th>
-                             <th className="py-4 px-6 border-b border-slate-100 text-rose-600">Total Mati</th>
-                             <th className="py-4 px-6 border-b border-slate-100">% Mort</th>
-                            <th className="py-4 px-6 border-b border-slate-100 text-emerald-600">Total Pakan</th>
-                            <th className="py-4 px-6 border-b border-slate-100 text-right">Action</th>
+                            <th className="py-4 px-6 border-b border-slate-100 bg-slate-50 w-12 text-center">No</th>
+                            <th className="py-4 px-6 border-b border-slate-100 bg-slate-50">Date/ID</th>
+                            <th className="py-4 px-6 border-b border-slate-100 bg-slate-50">IP</th>
+                            <th className="py-4 px-6 border-b border-slate-100 bg-slate-50">FCR (C/D)</th>
+                            <th className="py-4 px-6 border-b border-slate-100 bg-slate-50 text-blue-600">Bobot</th>
+                            <th className="py-4 px-6 border-b border-slate-100 bg-slate-50">Pop Awal</th>
+                            <th className="py-4 px-6 border-b border-slate-100 bg-slate-50">Pop Akhir</th>
+                            <th className="py-4 px-6 border-b border-slate-100 bg-slate-50">Mati Harian</th>
+                             <th className="py-4 px-6 border-b border-slate-100 text-rose-600 bg-slate-50">Total Mati</th>
+                             <th className="py-4 px-6 border-b border-slate-100 bg-slate-50">% Mort</th>
+                             <th className="py-4 px-6 border-b border-slate-100 text-emerald-600 bg-slate-50">Pakan</th>
+                            <th className="py-4 px-6 border-b border-slate-100 text-right bg-slate-50">Action</th>
                           </tr>
                         </thead>
                         <tbody className="text-xs font-bold text-slate-600">
-                          {history.map((record) => (
+                          {[...history].sort((a, b) => b.age - a.age).map((record, idx) => (
                             <tr key={record.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                              <td className="py-4 px-6 text-center text-slate-400 font-mono text-[10px]">
+                                {history.length - idx}
+                              </td>
                               <td className="py-4 px-6">
                                 <div className="flex flex-col">
                                   <span className="text-slate-900 font-black flex items-center gap-1.5">
@@ -1311,23 +1422,41 @@ export default function App() {
                               </td>
                               <td className="py-4 px-6">
                                 <div className="flex flex-col">
-                                  <span className="font-mono text-slate-800">{record.fcr}</span>
-                                  {record.dailyFcr && (
-                                    <span className="text-[9px] text-emerald-600 font-black uppercase">D: {record.dailyFcr}</span>
+                                  <span className="font-mono text-slate-800">{record.fcr.toFixed(2)}</span>
+                                  {record.dailyFcr !== null && record.dailyFcr !== undefined && (
+                                    <div className="flex flex-col">
+                                      <span className="text-[9px] text-emerald-600 font-black uppercase">D: {record.dailyFcr.toFixed(2)}</span>
+                                      {record.dailyAdg && (
+                                        <span className="text-[8px] text-blue-500 font-bold -mt-0.5">+{Math.round(record.dailyAdg)}g</span>
+                                      )}
+                                    </div>
                                   )}
+                                </div>
+                              </td>
+                              <td className="py-4 px-6">
+                                <div className="flex flex-col">
+                                  <span className="text-slate-900 font-black uppercase">
+                                    {Math.round((record.totalWeight / record.currentPop) * 1000).toLocaleString()} <span className="text-[9px]">gr/ekor</span>
+                                  </span>
+                                  <span className="text-[8px] text-slate-400 font-bold uppercase mt-0.5">
+                                    Total: {Math.round(record.totalWeight).toLocaleString()} kg
+                                  </span>
                                 </div>
                               </td>
                               <td className="py-4 px-6 text-slate-500">{record.initialPop.toLocaleString()} <span className="text-[9px]">ekor</span></td>
                               <td className="py-4 px-6 text-slate-900 font-black">{record.currentPop.toLocaleString()} <span className="text-[9px]">ekor</span></td>
                               <td className="py-4 px-6 text-rose-500 font-bold">{record.dailyDeaths?.toLocaleString() || 0} <span className="text-[9px]">ekor</span></td>
-                              <td className="py-4 px-6 text-rose-600 font-bold">{record.weeklyDeaths?.toLocaleString() || 0} <span className="text-[9px]">ekor</span></td>
                               <td className="py-4 px-6 text-rose-700 font-black">
                                 {(record.totalDeaths || 0).toLocaleString()} <span className="text-[9px]">ekor</span>
                               </td>
                               <td className="py-4 px-6 text-rose-600">{record.mortality.toFixed(2)}%</td>
-                              <td className="py-4 px-6 text-emerald-700 font-black">
-                                {record.totalFeed.toFixed(1)} <span className="text-[9px]">kg</span>
-                                <div className="text-[8px] text-emerald-500 font-bold">{(record.totalFeed / 50).toFixed(1)} SAK</div>
+                               <td className="py-4 px-6">
+                                <div className="flex flex-col">
+                                  <span className="text-emerald-700 font-black">
+                                    {(record.dailyFeed || 0).toFixed(1)} <span className="text-[9px]">kg</span>
+                                    <span className="ml-1 text-[8px] text-emerald-500 font-bold">({((record.dailyFeed || 0) / 50).toFixed(2)} SAK)</span>
+                                  </span>
+                                </div>
                               </td>
                               <td className="py-4 px-6">
                                 <button 
@@ -1341,7 +1470,7 @@ export default function App() {
                           ))}
                           {history.length === 0 && (
                             <tr>
-                              <td colSpan={10} className="py-20 text-center text-slate-400 font-black uppercase tracking-widest text-[10px]">
+                              <td colSpan={12} className="py-20 text-center text-slate-400 font-black uppercase tracking-widest text-[10px]">
                                 No archives found
                               </td>
                             </tr>
@@ -1371,14 +1500,31 @@ export default function App() {
                           {history.length > 0 ? (history.reduce((a, b) => a + b.fcr, 0) / history.length).toFixed(2) : '0.00'}
                         </span>
                       </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-400">Avg Daily FCR</span>
+                        <span className="text-2xl font-black italic text-emerald-500">
+                          {(() => {
+                            const dailyRecords = history.filter(r => r.dailyFcr !== null && r.dailyFcr !== undefined);
+                            return dailyRecords.length > 0 
+                              ? (dailyRecords.reduce((a, b) => a + (b.dailyFcr || 0), 0) / dailyRecords.length).toFixed(2)
+                              : '0.00';
+                          })()}
+                        </span>
+                      </div>
                       <div className="flex items-center justify-between border-t border-slate-700 pt-4">
                         <span className="text-xs font-bold text-slate-400">Total Mortality (Overall)</span>
                         <div className="text-right">
                           <p className="text-2xl font-black italic text-rose-400">
-                             {history.length > 0 ? (history[0].totalDeaths || 0).toLocaleString() : '0'} <span className="text-[10px]">EKOR</span>
+                             {(() => {
+                               const latest = [...history].sort((a, b) => b.age - a.age)[0];
+                               return latest ? (latest.totalDeaths || (latest.initialPop - latest.currentPop)).toLocaleString() : '0';
+                             })()} <span className="text-[10px]">EKOR</span>
                           </p>
                           <p className="text-[10px] font-bold text-slate-500 uppercase">
-                            {history.length > 0 ? history[0].mortality.toFixed(2) : '0.00'} % TOTAL
+                            {(() => {
+                               const latest = [...history].sort((a, b) => b.age - a.age)[0];
+                               return latest ? latest.mortality.toFixed(2) : '0.00';
+                             })()} % TOTAL
                           </p>
                         </div>
                       </div>
@@ -1386,10 +1532,16 @@ export default function App() {
                         <span className="text-xs font-bold text-slate-400">Total Feed (All Time)</span>
                         <div className="text-right">
                           <p className="text-2xl font-black italic text-emerald-400">
-                             {history.length > 0 ? history[0].totalFeed.toLocaleString() : '0'} <span className="text-[10px]">KG</span>
+                             {(() => {
+                               const latest = [...history].sort((a, b) => b.age - a.age)[0];
+                               return latest ? latest.totalFeed.toLocaleString() : '0';
+                             })()} <span className="text-[10px]">KG</span>
                           </p>
                           <p className="text-[10px] font-bold text-slate-500 uppercase">
-                            ≈ {history.length > 0 ? (history[0].totalFeed / 50).toFixed(1) : '0.0'} SAK
+                            ≈ {(() => {
+                               const latest = [...history].sort((a, b) => b.age - a.age)[0];
+                               return latest ? (latest.totalFeed / 50).toFixed(2) : '0.00';
+                             })()} SAK
                           </p>
                         </div>
                       </div>
