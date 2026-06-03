@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <!-- Background -->
+  <rect width="512" height="512" rx="128" fill="#090d16" />
+  
+  <!-- Subtle inner radial gradient shadow -->
+  <circle cx="256" cy="256" r="220" fill="none" stroke="#22c55e" stroke-width="2" stroke-opacity="0.2" />
+  
+  <!-- Hexagonal emblem frame -->
+  <polygon points="256,100 390,178 390,334 256,412 122,334 122,178" fill="#131c31" stroke="#10b981" stroke-width="12" stroke-linejoin="round" />
+  
+  <!-- Stylized modern chicken / bird shape in green and gold -->
+  <g transform="translate(196, 176)">
+    <!-- Body curve -->
+    <path d="M70,30 C90,30 110,40 120,60 C130,80 120,110 90,130 C60,150 20,140 10,110 C0,80 20,40 60,30" fill="url(#grad-gold)" />
+    <!-- Wing accent -->
+    <path d="M50,60 C70,60 80,75 80,95 C80,115 65,125 45,115 C30,105 30,70 50,60" fill="#10b981" />
+    <!-- Comb (Red/Gold poultry crown) -->
+    <path d="M125,50 L135,40 L130,55 L140,50 L132,62 Z" fill="#ef4444" />
+    <!-- Beak -->
+    <polygon points="127,70 137,73 125,78" fill="#f59e0b" />
+    <!-- Eye -->
+    <circle cx="110" cy="68" r="6" fill="#090d16" />
+  </g>
+  
+  <!-- Branding Text underneath Hexagon -->
+  <text x="256" y="445" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="900" text-anchor="middle" fill="#10b981" letter-spacing="4">ERFOURS</text>
+
+  <!-- Gradients -->
+  <defs>
+    <linearGradient id="grad-gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+  </defs>
+</svg>
