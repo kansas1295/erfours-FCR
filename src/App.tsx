@@ -299,12 +299,11 @@ export default function App() {
     const validDrafts = activeDrafts.filter(d => (parseInt(d.birds as any) || 0) > 0 && parseWeight(d.weight) > 0);
     if (validDrafts.length > 0) {
       const totalB = validDrafts.reduce((sum, d) => sum + (parseInt(d.birds as any) || 0), 0);
-      const totalW_ons = validDrafts.reduce((sum, d) => sum + parseWeight(d.weight), 0);
-      const totalW_kg = totalW_ons / 10;
+      const totalW = validDrafts.reduce((sum, d) => sum + parseWeight(d.weight), 0);
       setHarvestBirds(totalB.toString());
-      setHarvestTotalWeight(totalW_kg.toFixed(2));
-      const avgW_kg = totalB > 0 ? (totalW_kg / totalB) : 0;
-      setHarvestAvgWeight(avgW_kg.toFixed(3));
+      setHarvestTotalWeight(totalW.toFixed(2));
+      const avgW = totalB > 0 ? (totalW / totalB) : 0;
+      setHarvestAvgWeight(avgW.toFixed(3));
     }
   }, [activeDrafts]);
 
@@ -1667,7 +1666,7 @@ export default function App() {
                             <p className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5">{col.name}</p>
                             <div className="flex flex-col font-bold">
                               <span className="text-slate-700 whitespace-nowrap">{col.birds || 0} ekr</span>
-                              <span className="text-emerald-700 whitespace-nowrap">{col.weight ? `${col.weight.toFixed(1)} ons` : '-'}</span>
+                              <span className="text-emerald-700 whitespace-nowrap">{col.weight ? `${col.weight.toFixed(2)} kg` : '-'}</span>
                             </div>
                           </div>
                         ))}
@@ -1677,11 +1676,8 @@ export default function App() {
                             <span className="text-slate-800 whitespace-nowrap">
                               {validActiveDrafts.reduce((sum, d) => sum + (parseInt(d.birds as any) || 0), 0)} Ekr
                             </span>
-                            <span className="text-emerald-800 text-[8.5px] whitespace-nowrap">
-                              {(() => {
-                                const totalW_ons = validActiveDrafts.reduce((sum, d) => sum + parseWeight(d.weight), 0);
-                                return `${totalW_ons.toFixed(1)} Ons (${(totalW_ons / 10).toFixed(2)} Kg)`;
-                              })()}
+                            <span className="text-emerald-800 whitespace-nowrap">
+                              {validActiveDrafts.reduce((sum, d) => sum + parseWeight(d.weight), 0).toFixed(2)} Kg
                             </span>
                           </div>
                         </div>
@@ -1844,37 +1840,27 @@ export default function App() {
                         </div>
                         
                         {/* Interactive Scale Totals Display on Paper */}
-                        <div className="border border-slate-800 p-3 bg-white flex items-center justify-around gap-4 font-mono self-stretch md:self-auto rounded flex-wrap">
+                        <div className="border border-slate-800 p-3 bg-white flex items-center gap-6 font-mono self-stretch md:self-auto rounded">
                           <div className="text-center border-r border-slate-200 pr-4">
                             <p className="text-[8px] font-black uppercase text-slate-450">Ekor (Total)</p>
-                            <p className="text-xs md:text-sm font-black text-slate-900">
+                            <p className="text-sm font-black text-slate-900">
                               {validActiveDrafts.reduce((sum, d) => sum + (parseInt(d.birds as any) || 0), 0).toLocaleString()} <span className="text-[9px] font-normal text-slate-400">EKR</span>
                             </p>
                           </div>
                           <div className="text-center border-r border-slate-200 pr-4">
                             <p className="text-[8px] font-black uppercase text-slate-450">Berat (Total)</p>
-                            <p className="text-xs md:text-sm font-black text-emerald-700">
-                              {(() => {
-                                const totalW_ons = validActiveDrafts.reduce((sum, d) => sum + parseWeight(d.weight), 0);
-                                return (
-                                  <>
-                                    {totalW_ons.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}{" "}
-                                    <span className="text-[9px] font-normal text-slate-400">ONS</span>
-                                    <span className="text-[8px] font-normal text-slate-500 block">({(totalW_ons / 10).toFixed(2)} KG)</span>
-                                  </>
-                                );
-                              })()}
+                            <p className="text-sm font-black text-emerald-700">
+                              {validActiveDrafts.reduce((sum, d) => sum + parseWeight(d.weight), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[9px] font-normal text-slate-400">KG</span>
                             </p>
                           </div>
                           <div className="text-center">
                             <p className="text-[8px] font-black uppercase text-slate-450">Rata-rata (kg)</p>
-                            <p className="text-xs md:text-sm font-black text-rose-700">
+                            <p className="text-sm font-black text-rose-700">
                               {(() => {
                                 const totalB = validActiveDrafts.reduce((sum, d) => sum + (parseInt(d.birds as any) || 0), 0);
-                                const totalW_ons = validActiveDrafts.reduce((sum, d) => sum + parseWeight(d.weight), 0);
-                                const totalW_kg = totalW_ons / 10;
-                                return totalB > 0 ? (totalW_kg / totalB).toFixed(3) : '0.000';
-                              })()} <span className="text-[9px] font-normal text-slate-400">KG</span>
+                                const totalW = validActiveDrafts.reduce((sum, d) => sum + parseWeight(d.weight), 0);
+                                return totalB > 0 ? (totalW / totalB).toFixed(3) : '0.000';
+                              })()}
                             </p>
                           </div>
                         </div>
@@ -2004,17 +1990,17 @@ export default function App() {
                             </tr>
                             <tr className="bg-slate-50 border-b-2 border-slate-800 text-[10px] font-black">
                               <th className="py-1.5 border-r border-slate-300 w-[7%]">Ekr</th>
-                              <th className="py-1.5 border-r-2 border-slate-800 w-[9%] text-emerald-800">Ons</th>
+                              <th className="py-1.5 border-r-2 border-slate-800 w-[9%] text-emerald-800">Kg (Net)</th>
                               <th className="py-1.5 border-r border-slate-300 w-[7%]">Ekr</th>
-                              <th className="py-1.5 border-r-2 border-slate-800 w-[9%] text-emerald-800">Ons</th>
+                              <th className="py-1.5 border-r-2 border-slate-800 w-[9%] text-emerald-800">Kg (Net)</th>
                               <th className="py-1.5 border-r border-slate-300 w-[7%]">Ekr</th>
-                              <th className="py-1.5 border-r-2 border-slate-800 w-[9%] text-emerald-800">Ons</th>
+                              <th className="py-1.5 border-r-2 border-slate-800 w-[9%] text-emerald-800">Kg (Net)</th>
                               <th className="py-1.5 border-r border-slate-300 w-[7%]">Ekr</th>
-                              <th className="py-1.5 border-r-2 border-slate-800 w-[9%] text-emerald-800">Ons</th>
+                              <th className="py-1.5 border-r-2 border-slate-800 w-[9%] text-emerald-800">Kg (Net)</th>
                               <th className="py-1.5 border-r border-slate-300 w-[7%]">Ekr</th>
-                              <th className="py-1.5 border-r-2 border-slate-800 w-[9%] text-emerald-800">Ons</th>
+                              <th className="py-1.5 border-r-2 border-slate-800 w-[9%] text-emerald-800">Kg (Net)</th>
                               <th className="py-1.5 border-r border-slate-300 w-[7%]">Ekr</th>
-                              <th className="py-1.5 border-slate-800 w-[9%] text-emerald-800">Ons</th>
+                              <th className="py-1.5 border-slate-800 w-[9%] text-emerald-800">Kg (Net)</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -2838,10 +2824,7 @@ export default function App() {
                         <div key={draft.id} className="flex justify-between items-center py-2 px-3 hover:bg-slate-50 transition-all font-mono">
                           <span className="text-[9px] text-slate-400 font-bold">Baris #{idx+1}</span>
                           <span className="text-slate-700 font-bold">{draft.birds} <span className="text-[9px] font-normal text-slate-400">ekr</span></span>
-                          <span className="text-emerald-700 font-black text-right">
-                            {draft.weight.toFixed(1)} <span className="text-[9px] font-normal text-slate-450">ons</span>{" "}
-                            <span className="text-[9px] text-slate-400 font-normal">({(draft.weight / 10).toFixed(2)} kg)</span>
-                          </span>
+                          <span className="text-emerald-700 font-black text-right">{draft.weight.toFixed(2)} <span className="text-[9px] font-normal text-slate-400">kg</span></span>
                         </div>
                       ))
                     ) : (
@@ -2879,7 +2862,7 @@ export default function App() {
                         <h3 style="margin-top: 30px; border-bottom: 1px solid black; padding-bottom: 5px;">DRAFT TIMBANGAN:</h3>
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; font-size: 11px;">
                           ${selectedRecordDrafts.weighingDrafts?.map((d, i) => `
-                            <div>[#${i+1}] ${d.birds} Ekr: <strong>${d.weight.toFixed(1)} ons</strong> <span style="font-size: 9px; color: gray;">(${(d.weight / 10).toFixed(2)} kg)</span></div>
+                            <div>[#${i+1}] ${d.birds} Ekr: <strong>${d.weight.toFixed(2)} kg</strong></div>
                           `).join('') || '<div>Input Manual</div>'}
                         </div>
                         <div style="margin-top: 50px; display: flex; justify-content: space-between; text-align: center; font-size: 11px;">
