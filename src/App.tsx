@@ -20,10 +20,7 @@ import {
   Plus,
   X,
   Printer,
-  Clock,
-  Smartphone,
-  Check,
-  Share2
+  Clock
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -64,12 +61,6 @@ interface WeighingDraft {
   weight: number; // in kg
 }
 
-interface WeighingDraftInput {
-  id: string;
-  birds: number | string;
-  weight: number | string;
-}
-
 interface HarvestRecord {
   id: string;
   date: string;
@@ -98,46 +89,7 @@ interface HarvestRecord {
   securityTgl?: string;
 }
 
-const parseWeight = (val: any): number => {
-  if (val === undefined || val === null || val === '') return 0;
-  if (typeof val === 'number') return val;
-  const str = val.toString().replace(/,/g, '.');
-  return parseFloat(str) || 0;
-};
-
 export default function App() {
-  // PWA Install States & Hook
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [showAndroidModal, setShowAndroidModal] = useState<boolean>(false);
-  const [isWebAppInstalled, setIsWebAppInstalled] = useState<boolean>(false);
-
-  useEffect(() => {
-    const handleBeforePrompt = (e: any) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-      // Automatically prompt or show badge on load on Android
-      console.log('[PWA] beforeinstallprompt event captured');
-    };
-    const handleAppInstalled = () => {
-      setIsWebAppInstalled(true);
-      setDeferredPrompt(null);
-      console.log('[PWA] Erfours Android App was successfully installed!');
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforePrompt);
-    window.addEventListener('appinstalled', handleAppInstalled);
-
-    // Initial check for standalone mode
-    if (window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone) {
-      setIsWebAppInstalled(true);
-    }
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforePrompt);
-      window.removeEventListener('appinstalled', handleAppInstalled);
-    };
-  }, []);
-
   // Input State
   const [initialPop, setInitialPop] = useState<string>('10000');
   const [currentPop, setCurrentPop] = useState<string>('9720');
@@ -146,7 +98,7 @@ export default function App() {
   const [age, setAge] = useState<string>('35');
   
   // App State
-  const [view, setView] = useState<'daily' | 'cumulative' | 'history' | 'harvest' | 'weighing'>('daily');
+  const [view, setView] = useState<'daily' | 'cumulative' | 'history' | 'harvest'>('daily');
   const [history, setHistory] = useState<FlockRecord[]>([]);
   const [harvestHistory, setHarvestHistory] = useState<HarvestRecord[]>([]);
   const [harvestActiveTab, setHarvestActiveTab] = useState<'sheet' | 'history'>('sheet');
@@ -262,11 +214,11 @@ export default function App() {
   const [harvestAge, setHarvestAge] = useState<string>('');
 
   // Weighing drafts state (Data Timbang Panen - fixed 90 entries table)
-  const [activeDrafts, setActiveDrafts] = useState<WeighingDraftInput[]>(() => 
+  const [activeDrafts, setActiveDrafts] = useState<WeighingDraft[]>(() => 
     Array.from({ length: 90 }, (_, i) => ({
       id: `draft-${i}`,
-      birds: '',
-      weight: ''
+      birds: 0,
+      weight: 0
     }))
   );
   const [draftBirds, setDraftBirds] = useState<string>('15'); // default 15 ekor per crate
@@ -296,12 +248,12 @@ export default function App() {
 
   // Sync active weighing drafts calculations directly to main harvest inputs
   useEffect(() => {
-    const validDrafts = activeDrafts.filter(d => (parseInt(d.birds as any) || 0) > 0 && parseWeight(d.weight) > 0);
-    if (validDrafts.length > 0) {
-      const totalB = validDrafts.reduce((sum, d) => sum + (parseInt(d.birds as any) || 0), 0);
-      const totalW = validDrafts.reduce((sum, d) => sum + parseWeight(d.weight), 0);
+    const hasWeighing = activeDrafts.some(d => d.birds > 0 && d.weight > 0);
+    if (hasWeighing) {
+      const totalB = activeDrafts.reduce((sum, d) => sum + (parseInt(d.birds as any) || 0), 0);
+      const totalW = activeDrafts.reduce((sum, d) => sum + (parseFloat(d.weight as any) || 0), 0);
       setHarvestBirds(totalB.toString());
-      setHarvestTotalWeight(totalW.toFixed(2));
+      setHarvestTotalWeight(Math.round(totalW).toString());
       const avgW = totalB > 0 ? (totalW / totalB) : 0;
       setHarvestAvgWeight(avgW.toFixed(3));
     }
@@ -324,7 +276,7 @@ export default function App() {
       return;
     }
 
-    const netWeight = parseFloat((grossVal - tareVal).toFixed(2));
+    const netWeight = Math.round(grossVal - tareVal);
 
     const newDraft: WeighingDraft = {
       id: crypto.randomUUID(),
@@ -334,7 +286,7 @@ export default function App() {
 
     setActiveDrafts(prev => {
       // Find the first empty slot
-      const idx = prev.findIndex(d => (parseInt(d.birds as any) || 0) === 0 && parseWeight(d.weight) === 0);
+      const idx = prev.findIndex(d => d.birds === 0 && d.weight === 0);
       if (idx !== -1) {
         const next = [...prev];
         next[idx] = {
@@ -358,8 +310,8 @@ export default function App() {
 
   const handleRemoveDraft = (id: string) => {
     setActiveDrafts(prev => {
-      const next = prev.map(d => d.id === id ? { ...d, birds: '', weight: '' } : d);
-      const activeCount = next.filter(d => (parseInt(d.birds as any) || 0) > 0 && parseWeight(d.weight) > 0).length;
+      const next = prev.map(d => d.id === id ? { ...d, birds: 0, weight: 0 } : d);
+      const activeCount = next.filter(d => d.birds > 0 && d.weight > 0).length;
       if (activeCount === 0) {
         setHarvestBirds('');
         setHarvestTotalWeight('');
@@ -372,26 +324,14 @@ export default function App() {
   const handleCellChange = (index: number, field: 'birds' | 'weight', val: string) => {
     setActiveDrafts(prev => {
       const next = [...prev];
-      let sanitizedVal = val;
-      if (field === 'weight') {
-        // Replace comma with dot
-        sanitizedVal = val.replace(/,/g, '.');
-        // Prevent typing multiple dots or non-digits
-        sanitizedVal = sanitizedVal.replace(/[^0-9.]/g, '');
-        const parts = sanitizedVal.split('.');
-        if (parts.length > 2) {
-          sanitizedVal = parts[0] + '.' + parts.slice(1).join('');
-        }
-      } else if (field === 'birds') {
-        sanitizedVal = val.replace(/[^0-9]/g, '');
-      }
+      const numericVal = field === 'birds' ? (parseInt(val) || 0) : Math.round(parseFloat(val) || 0);
       next[index] = {
         ...next[index],
-        [field]: sanitizedVal
+        [field]: numericVal
       };
       
-      // If we cleared both birds and weight to empty, we check if we should reset harvest inputs
-      const activeCount = next.filter(d => (parseInt(d.birds as any) || 0) > 0 && parseWeight(d.weight) > 0).length;
+      // If we cleared both birds and weight to 0/empty, we check if we should reset harvest inputs
+      const activeCount = next.filter(d => d.birds > 0 && d.weight > 0).length;
       if (activeCount === 0) {
         setHarvestBirds('');
         setHarvestTotalWeight('');
@@ -407,7 +347,7 @@ export default function App() {
 
   // Sync harvest age & weight with daily/main state if empty
   useEffect(() => {
-    const hasWeighings = activeDrafts.some(d => (parseInt(d.birds as any) || 0) > 0 && parseWeight(d.weight) > 0);
+    const hasWeighings = activeDrafts.some(d => d.birds > 0 && d.weight > 0);
     if (hasWeighings) return; // Skip if scale calculator is active
     if (!harvestAge && (dailyAge || age)) setHarvestAge(dailyAge || age);
     if (!harvestAvgWeight && dailyWeight) {
@@ -415,7 +355,7 @@ export default function App() {
       const b = parseFloat(harvestBirds) || 0;
       const aw = parseFloat(dailyWeight) || 0;
       if (b > 0 && aw > 0) {
-        setHarvestTotalWeight((b * aw / 1000).toFixed(2));
+        setHarvestTotalWeight(Math.round(b * aw / 1000).toString());
       }
     }
   }, [age, harvestAge, dailyAge, dailyWeight, harvestAvgWeight, harvestBirds, activeDrafts]);
@@ -868,14 +808,8 @@ export default function App() {
       ? (((100 - currentMortality) * avgWeightKg) / (currentFcr * hAge)) * 100 
       : 0;
 
-    const hasWeighing = activeDrafts.some(d => (parseInt(d.birds as any) || 0) > 0 && parseWeight(d.weight) > 0);
-    const validDrafts: WeighingDraft[] = activeDrafts
-      .filter(d => (parseInt(d.birds as any) || 0) > 0 && parseWeight(d.weight) > 0)
-      .map(d => ({
-        id: d.id,
-        birds: parseInt(d.birds as any) || 0,
-        weight: parseWeight(d.weight)
-      }));
+    const hasWeighing = activeDrafts.some(d => d.birds > 0 && d.weight > 0);
+    const validDrafts = activeDrafts.filter(d => d.birds > 0 && d.weight > 0);
 
     const newRecord: HarvestRecord = {
       id: crypto.randomUUID(),
@@ -912,8 +846,8 @@ export default function App() {
     // Reset weighing document block states
     setActiveDrafts(Array.from({ length: 90 }, (_, i) => ({
       id: `draft-${i}`,
-      birds: '',
-      weight: ''
+      birds: 0,
+      weight: 0
     })));
     setDataTimbangNo(`PFL ${Math.floor(100000 + Math.random() * 900000)}`);
     setSpbNo('');
@@ -959,8 +893,8 @@ export default function App() {
         r.age,
         r.birds,
         r.avgWeight.toFixed(3),
-        r.totalWeight.toFixed(2),
-        runningTotalWeight.toFixed(2),
+        Math.round(r.totalWeight).toString(),
+        Math.round(runningTotalWeight).toString(),
         Math.round(r.ip).toString()
       ];
     });
@@ -1054,36 +988,8 @@ export default function App() {
     }));
   }, [history]);
 
-  const validActiveDrafts = useMemo(() => activeDrafts.filter(d => (parseInt(d.birds as any) || 0) > 0 && parseWeight(d.weight) > 0), [activeDrafts]);
+  const validActiveDrafts = useMemo(() => activeDrafts.filter(d => d.birds > 0 && d.weight > 0), [activeDrafts]);
   const hasWeighings = useMemo(() => validActiveDrafts.length > 0, [validActiveDrafts]);
-
-  const headerTableData = useMemo(() => {
-    return Array.from({ length: 6 }).map((_, c) => {
-      const colDrafts = activeDrafts.slice(c * 15, (c + 1) * 15);
-      const validColDrafts = colDrafts.filter(d => (parseInt(d.birds as any) || 0) > 0 && parseWeight(d.weight) > 0);
-      const birds = validColDrafts.reduce((sum, d) => sum + (parseInt(d.birds as any) || 0), 0);
-      const weight = validColDrafts.reduce((sum, d) => sum + parseWeight(d.weight), 0);
-      const avg = birds > 0 ? (weight / birds) : 0;
-      return {
-        name: `Kolom ${c + 1}`,
-        birds,
-        weight,
-        avg: avg > 0 ? avg.toFixed(3) : '0.000'
-      };
-    });
-  }, [activeDrafts]);
-
-  const grandTotalBirds = useMemo(() => {
-    return validActiveDrafts.reduce((sum, d) => sum + (parseInt(d.birds as any) || 0), 0);
-  }, [validActiveDrafts]);
-
-  const grandTotalWeight = useMemo(() => {
-    return validActiveDrafts.reduce((sum, d) => sum + parseWeight(d.weight), 0);
-  }, [validActiveDrafts]);
-
-  const grandAvgWeight = useMemo(() => {
-    return grandTotalBirds > 0 ? grandTotalWeight / grandTotalBirds : 0;
-  }, [grandTotalBirds, grandTotalWeight]);
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
@@ -1114,12 +1020,6 @@ export default function App() {
             Panen
           </button>
           <button 
-            onClick={() => setView('weighing')}
-            className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${view === 'weighing' ? 'bg-emerald-400 text-emerald-900 shadow-sm' : 'text-emerald-400 hover:text-white'}`}
-          >
-            Lembar Timbang
-          </button>
-          <button 
             onClick={() => setView('cumulative')}
             className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${view === 'cumulative' ? 'bg-emerald-400 text-emerald-900 shadow-sm' : 'text-emerald-400 hover:text-white'}`}
           >
@@ -1133,16 +1033,8 @@ export default function App() {
           </button>
         </nav>
 
-        <div className="flex items-center gap-4 text-sm font-medium">
-          <button 
-            onClick={() => setShowAndroidModal(true)}
-            className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 border border-emerald-400 active:scale-95 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-emerald-900/30 transition-all cursor-pointer animate-pulse"
-          >
-            <Smartphone size={13} className="animate-bounce" />
-            <span>ID: Android App</span>
-          </button>
-
-          <div className="hidden md:flex items-center gap-2">
+        <div className="hidden md:flex items-center gap-6 text-sm font-medium">
+          <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> 
             System Active
           </div>
@@ -1515,233 +1407,332 @@ export default function App() {
                 </div>
               </section>
             </motion.div>
-          ) : (view === 'harvest' || view === 'weighing') ? (
+          ) : view === 'harvest' ? (
             <motion.div 
-              key={view}
+              key="harvest"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               className="h-full flex flex-col md:flex-row p-6 gap-6 overflow-hidden"
             >
-              {view === 'harvest' && (
-                <section className="w-full md:w-60 bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col gap-4 overflow-y-auto shrink-0">
+              <section className="w-full md:w-96 bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col gap-6 overflow-y-auto shrink-0">
+                <div className="space-y-6">
+                  <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+                    <Beef size={18} className="text-emerald-600" />
+                    <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest">Input Data Panen</h2>
+                  </div>
+
                   <div className="space-y-4">
-                    <div className="flex items-center gap-1.5 border-b border-slate-100 pb-2">
-                      <Beef size={15} className="text-emerald-600" />
-                      <h2 className="text-[11px] font-black text-slate-800 uppercase tracking-widest">Input Data Panen</h2>
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight">Tanggal Panen</label>
+                      <input 
+                        type="date" 
+                        value={harvestDate} 
+                        onChange={(e) => setHarvestDate(e.target.value)} 
+                        className="w-full border border-slate-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-lg font-black" 
+                      />
+                    </div>
+                    
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight">Umur Panen (Hari)</label>
+                      <div className="relative">
+                        <input 
+                          type="number" 
+                          value={harvestAge} 
+                          onChange={(e) => setHarvestAge(e.target.value)} 
+                          className="w-full border border-slate-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-lg font-black tracking-tighter" 
+                        />
+                        <span className="absolute right-3 top-2.5 text-slate-400 text-[10px] font-black uppercase">HARI</span>
+                      </div>
                     </div>
 
-                    <div className="space-y-3.5">
-                      <div className="space-y-1">
-                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-tight">Tanggal Panen</label>
-                        <input 
-                          type="date" 
-                          value={harvestDate} 
-                          onChange={(e) => setHarvestDate(e.target.value)} 
-                          className="w-full border border-slate-200 rounded-lg py-1 px-2.5 bg-slate-50/50 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs font-bold text-slate-800" 
-                        />
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-tight">Umur Panen (Hari)</label>
-                        <div className="relative">
-                          <input 
-                            type="number" 
-                            value={harvestAge} 
-                            onChange={(e) => setHarvestAge(e.target.value)} 
-                            className="w-full border border-slate-200 rounded-lg py-1 px-2.5 bg-slate-50/50 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs font-mono font-bold text-slate-800 tracking-tighter" 
-                          />
-                          <span className="absolute right-2.5 top-1.5 text-slate-400 text-[8px] font-black uppercase">HARI</span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-tight">Jumlah Ekor Ayam</label>
-                        <div className="relative">
-                          <input 
-                            type="number" 
-                            value={harvestBirds} 
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setHarvestBirds(val);
-                              const b = parseFloat(val) || 0;
-                              const aw = parseFloat(harvestAvgWeight) || 0;
-                              const tw = parseFloat(harvestTotalWeight) || 0;
-                              
-                              if (b > 0) {
-                                if (aw > 0) {
-                                  setHarvestTotalWeight((b * aw).toFixed(2));
-                                } else if (tw > 0) {
-                                  setHarvestAvgWeight((tw / b).toFixed(3));
-                                }
-                              }
-                            }} 
-                            className={`w-full border border-slate-200 rounded-lg py-1 px-2.5 bg-slate-50/55 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs font-mono font-bold text-slate-800 tracking-tighter ${hasWeighings ? 'bg-slate-100/80 cursor-not-allowed opacity-80' : ''}`}
-                            disabled={hasWeighings}
-                          />
-                          <span className="absolute right-2.5 top-1.5 text-slate-400 text-[8px] font-black uppercase">EKOR</span>
-                        </div>
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-baseline">
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight">Jumlah Ekor Ayam</label>
                         {hasWeighings && (
-                          <p className="text-[7.5px] text-emerald-600 font-bold uppercase tracking-tight -mt-0.5">*Kunci: dihitung dari Lembar Timbang</p>
+                          <span className="text-[8px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-black uppercase">Auto-scale</span>
                         )}
                       </div>
-
-                      <div className="space-y-1">
-                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-tight">Total Berat Panen (kg)</label>
-                        <div className="relative">
-                          <input 
-                            type="number" 
-                            placeholder="0"
-                            value={harvestTotalWeight} 
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setHarvestTotalWeight(val);
-                              const b = parseFloat(harvestBirds) || 0;
-                              const tw = parseFloat(val) || 0;
-                              if (b > 0 && tw > 0) {
-                                 setHarvestAvgWeight((tw / b).toFixed(3));
+                      <div className="relative">
+                        <input 
+                          type="number" 
+                          value={harvestBirds} 
+                          disabled={hasWeighings}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setHarvestBirds(val);
+                            const b = parseFloat(val) || 0;
+                            const aw = parseFloat(harvestAvgWeight) || 0;
+                            const tw = parseFloat(harvestTotalWeight) || 0;
+                            
+                            if (b > 0) {
+                              if (aw > 0) {
+                                setHarvestTotalWeight(Math.round(b * aw).toString());
+                              } else if (tw > 0) {
+                                setHarvestAvgWeight((tw / b).toFixed(3));
                               }
-                            }} 
-                            className={`w-full border border-slate-200 rounded-lg py-1 px-2.5 bg-slate-50/55 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs font-mono font-black text-slate-800 tracking-tighter ${hasWeighings ? 'bg-slate-100/80 cursor-not-allowed opacity-80' : ''}`}
-                            disabled={hasWeighings}
-                          />
-                          <span className="absolute right-2.5 top-1.5 text-slate-400 text-[8px] font-black uppercase">KG</span>
-                        </div>
+                            }
+                          }} 
+                          className={`w-full border border-slate-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-lg font-black tracking-tighter ${hasWeighings ? 'bg-slate-100 cursor-not-allowed opacity-80' : ''}`} 
+                        />
+                        <span className="absolute right-3 top-2.5 text-slate-400 text-[10px] font-black uppercase">EKOR</span>
                       </div>
-
-                      <div className="space-y-1">
-                        <label className="block text-[9px] font-black text-rose-500 uppercase tracking-tight">Bobot Rata-rata (kg/ekor)</label>
-                        <div className="relative">
-                          <input 
-                            type="number" 
-                            placeholder="0"
-                            value={harvestAvgWeight} 
-                            step="0.001"
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setHarvestAvgWeight(val);
-                              const b = parseFloat(harvestBirds) || 0;
-                              const aw = parseFloat(val) || 0;
-                              if (b > 0 && aw > 0) {
-                                setHarvestTotalWeight((b * aw).toFixed(2));
-                              }
-                            }} 
-                            className={`w-full border border-slate-200 rounded-lg py-1 px-2.5 bg-slate-50/55 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs font-mono font-bold text-slate-800 tracking-tighter ${hasWeighings ? 'bg-slate-100/80 cursor-not-allowed opacity-80' : ''}`}
-                            disabled={hasWeighings}
-                          />
-                          <span className="absolute right-2.5 top-1.5 text-slate-400 text-[8px] font-black uppercase">KG/EKR</span>
-                        </div>
-                      </div>
+                      {hasWeighings && (
+                        <p className="text-[8px] text-emerald-600 font-bold uppercase tracking-tight -mt-0.5">*Kunci: dihitung dari total nota timbangan di bawah</p>
+                      )}
                     </div>
 
-                    <button 
-                      onClick={saveHarvest}
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 text-[9px] uppercase tracking-wider transition-all shadow-md active:scale-95 cursor-pointer mt-2"
-                    >
-                      <Save size={12} /> Simpan Data Panen
-                    </button>
-
-                    <div className="border-t border-slate-100 pt-3 flex flex-col gap-1 text-[8.5px] text-slate-400 font-semibold leading-relaxed">
-                      <p className="uppercase font-black text-slate-500">Petunjuk:</p>
-                      <p>&bull; Klik <strong className="text-emerald-600">Lembar Timbang</strong> di tab atas untuk mengisi baris nota timbang secara detail.</p>
-                      <p>&bull; Data panen akan otomatis terhitung dan tersinkronisasi dari Lembar Timbang jika terisi.</p>
-                    </div>
-                  </div>
-                </section>
-              )}
-              <section className="flex-1 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
-                {/* Dynamic Title and Header Actions based on view */}
-                <div className="px-6 py-4 border-b border-slate-100 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 sticky top-0 bg-white z-10">
-                  {view === 'weighing' ? (
-                    <>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Scale size={16} className="text-emerald-600" />
-                        <h3 className="text-xs font-black text-slate-850 uppercase tracking-widest">Lembar Timbang Digital</h3>
-                      </div>
-                      
-                      {/* Summary Table directly in the Header for the Weighing Sheet */}
-                      <div className="hidden xl:flex items-center gap-1 p-1 bg-slate-50 border border-slate-200 rounded-lg max-w-xl text-[9px] font-mono leading-tight flex-1 mx-4">
-                        {headerTableData.map((col, idx) => (
-                          <div key={idx} className={`flex-1 px-1.5 py-0.5 text-center ${idx < 5 ? 'border-r border-slate-200' : ''}`}>
-                            <p className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5">{col.name}</p>
-                            <div className="flex flex-col font-bold">
-                              <span className="text-slate-700 whitespace-nowrap">{col.birds || 0} ekr</span>
-                              <span className="text-emerald-700 whitespace-nowrap">{col.weight ? `${col.weight.toFixed(2)} kg` : '-'}</span>
-                            </div>
-                          </div>
-                        ))}
-                        <div className="flex-1 px-1.5 py-0.5 text-center border-l-2 border-slate-300 bg-emerald-50/70 rounded">
-                          <p className="text-[7.5px] font-black text-emerald-800 uppercase tracking-widest leading-none mb-0.5">TOTAL</p>
-                          <div className="flex flex-col font-black">
-                            <span className="text-slate-800 whitespace-nowrap">
-                              {validActiveDrafts.reduce((sum, d) => sum + (parseInt(d.birds as any) || 0), 0)} Ekr
-                            </span>
-                            <span className="text-emerald-800 whitespace-nowrap">
-                              {validActiveDrafts.reduce((sum, d) => sum + parseWeight(d.weight), 0).toFixed(2)} Kg
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-baseline">
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight">Total Berat Panen (kg)</label>
                         {hasWeighings && (
-                          <button
+                          <span className="text-[8px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-black uppercase">Auto-scale</span>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <input 
+                          type="number" 
+                          placeholder="0"
+                          value={harvestTotalWeight} 
+                          disabled={hasWeighings}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setHarvestTotalWeight(val);
+                            const b = parseFloat(harvestBirds) || 0;
+                            const tw = parseFloat(val) || 0;
+                            if (b > 0 && tw > 0) {
+                               setHarvestAvgWeight((tw / b).toFixed(3));
+                            }
+                          }} 
+                          className={`w-full border border-slate-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-lg font-black tracking-tighter ${hasWeighings ? 'bg-slate-100 cursor-not-allowed opacity-80' : ''}`} 
+                        />
+                        <span className="absolute right-3 top-2.5 text-slate-400 text-[10px] font-black uppercase">KG</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-baseline">
+                        <label className="block text-[10px] font-black text-rose-500 uppercase tracking-tight">Bobot Rata-rata Panen (kg/ekor)</label>
+                        {hasWeighings && (
+                          <span className="text-[8px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-black uppercase">Auto-scale</span>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <input 
+                          type="number" 
+                          placeholder="0"
+                          value={harvestAvgWeight} 
+                          disabled={hasWeighings}
+                          step="0.001"
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setHarvestAvgWeight(val);
+                            const b = parseFloat(harvestBirds) || 0;
+                            const aw = parseFloat(val) || 0;
+                            if (b > 0 && aw > 0) {
+                              setHarvestTotalWeight(Math.round(b * aw).toString());
+                            }
+                          }} 
+                          className={`w-full border border-slate-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-lg font-black tracking-tighter ${hasWeighings ? 'bg-slate-100 cursor-not-allowed opacity-80' : ''}`} 
+                        />
+                        <span className="absolute right-3 top-2.5 text-slate-400 text-[10px] font-black uppercase">kg/ekor</span>
+                      </div>
+                    </div>
+
+                    {/* Kalkulator Nota Timbang */}
+                    <div className="border bg-slate-50/50 border-slate-200 rounded-xl p-4 flex flex-col gap-3 mt-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <Scale size={15} className="text-emerald-600 animate-pulse" />
+                          <span className="text-[9px] font-black text-slate-700 uppercase tracking-wider">Kalkulator Nota Timbang</span>
+                        </div>
+                        {hasWeighings && (
+                          <button 
                             type="button"
                             onClick={() => {
-                              if (confirm('Hapus semua data nota timbang aktif?')) {
+                              if (confirm('Hapus semua draft nota timbang aktif?')) {
                                 setActiveDrafts(Array.from({ length: 90 }, (_, i) => ({
                                   id: `draft-${i}`,
-                                  birds: '',
-                                  weight: ''
+                                  birds: 0,
+                                  weight: 0
                                 })));
                                 setHarvestBirds('');
                                 setHarvestTotalWeight('');
                                 setHarvestAvgWeight('');
                               }
                             }}
-                            className="flex items-center gap-1.5 transition-colors bg-rose-50 text-rose-700 hover:bg-rose-100 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest cursor-pointer"
+                            className="text-[8px] font-black text-rose-500 hover:text-rose-700 uppercase tracking-tight"
                           >
-                            <Trash2 size={11} /> Hapus Data Timbang
+                            Reset
                           </button>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const printContents = document.getElementById('print-only-weighing-sheet')?.innerHTML;
-                            if (printContents) {
-                              const printWindow = window.open('', '_blank');
-                              if (printWindow) {
-                                printWindow.document.write(`
-                                  <html>
-                                    <head>
-                                      <title>Cetak Lembar Timbang Panen</title>
-                                      <script src="https://cdn.tailwindcss.com"></script>
-                                      <style>
-                                        body { padding: 40px; background: white; color: black; font-family: monospace; }
-                                        input { border: none !important; border-bottom: 1px dashed #ccc !important; background: transparent !important; pointer-events: none; }
-                                        input::placeholder { color: transparent; }
-                                        button, .no-print { display: none !important; }
-                                      </style>
-                                    </head>
-                                    <body>
-                                      ${printContents}
-                                    </body>
-                                  </html>
-                                `);
-                                printWindow.document.close();
-                                setTimeout(() => {
-                                  printWindow.print();
-                                  printWindow.close();
-                                }, 500);
-                              }
-                            }
-                          }}
-                          className="flex items-center gap-1.5 transition-colors bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest cursor-pointer"
-                        >
-                          <Printer size={11} /> Cetak Lembar Timbang
-                        </button>
                       </div>
-                    </>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="block text-[8px] font-black text-slate-400 uppercase">Ekor per Keranjang</label>
+                          <input 
+                            type="number"
+                            value={draftBirds}
+                            onChange={(e) => setDraftBirds(e.target.value)}
+                            placeholder="e.g. 15"
+                            className="w-full bg-white border border-slate-200 rounded py-1 px-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="block text-[8px] font-black text-slate-400 uppercase">Tara Keranjang (kg)</label>
+                          <input 
+                            type="number"
+                            step="0.05"
+                            value={crateTare}
+                            onChange={(e) => setCrateTare(e.target.value)}
+                            placeholder="e.g. 1.5"
+                            className="w-full bg-white border border-slate-200 rounded py-1 px-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[8px] font-black text-slate-400 uppercase">Berat Kotor Keranjang (Gross kg)</label>
+                        <div className="flex gap-1.5">
+                          <input 
+                            type="number"
+                            step="0.01"
+                            id="draft-weight-input"
+                            value={draftWeight}
+                            onChange={(e) => setDraftWeight(e.target.value)}
+                            placeholder="e.g. 23.5"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddDraft();
+                              }
+                            }}
+                            className="flex-1 bg-white border border-slate-200 rounded py-1 px-2 text-xs font-black text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          />
+                          <button 
+                            type="button"
+                            onClick={() => handleAddDraft()}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-3.5 py-1 rounded flex items-center gap-0.5 text-[9px] uppercase tracking-wider transition-colors shrink-0"
+                          >
+                            <Plus size={11} /> Add
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Display active drafts */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between items-center text-[7.5px] font-black text-slate-400 uppercase tracking-tight">
+                          <span>Daftar Nota Timbang ({validActiveDrafts.length})</span>
+                          <span>(Tekan Enter di input berat)</span>
+                        </div>
+                        
+                        {hasWeighings ? (
+                          <div className="max-h-36 overflow-y-auto space-y-1 pr-1 bg-white border border-slate-100 rounded p-1 scrollbar-thin">
+                            {validActiveDrafts.map((d, index) => (
+                              <div key={d.id} className="flex justify-between items-center text-[10px] bg-slate-50 hover:bg-slate-100/50 border border-slate-100 px-1.5 py-1 rounded transition-colors font-bold">
+                                <span className="text-[8px] font-black text-slate-400 font-mono">#{index + 1}</span>
+                                <span className="text-slate-700">{d.birds} Ekor</span>
+                                <span className="text-emerald-700 font-black font-mono">
+                                  {Math.round(d.weight)} kg
+                                </span>
+                                <button 
+                                  type="button"
+                                  onClick={() => handleRemoveDraft(d.id)}
+                                  className="text-rose-400 hover:text-rose-600 transition-colors"
+                                >
+                                  <X size={10} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-[8px] text-center text-slate-400 font-semibold py-3 bg-white border border-dashed border-slate-200 rounded">
+                            Timbangan kosong. Masukkan berat kotor &amp; tekan Enter.
+                          </p>
+                        )}
+                        
+                        {hasWeighings && (
+                          <div className="flex justify-between items-center text-[9px] bg-emerald-50 text-emerald-800 p-1.5 rounded border border-emerald-100 font-black mt-1">
+                            <span>TOTAL NETTO: </span>
+                            <span>
+                              {validActiveDrafts.reduce((sum, d) => sum + (parseInt(d.birds as any) || 0), 0).toLocaleString()} Ekor | {Math.round(validActiveDrafts.reduce((sum, d) => sum + (parseFloat(d.weight as any) || 0), 0))} kg
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={saveHarvest}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 px-4 rounded-lg flex items-center justify-center gap-2 text-[10px] uppercase tracking-[0.2em] transition-all shadow-lg active:scale-95"
+                  >
+                    <Save size={14} /> Simpan Data Panen
+                  </button>
+                </div>
+              </section>
+              <section className="flex-1 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+                {/* Header with Switcher Tabs */}
+                <div className="px-6 py-4 border-b border-slate-100 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 sticky top-0 bg-white z-10">
+                  <div className="flex bg-slate-100 p-1 rounded-lg self-start">
+                    <button
+                      type="button"
+                      onClick={() => setHarvestActiveTab('sheet')}
+                      className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${harvestActiveTab === 'sheet' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                    >
+                      📄 Lembar Timbang Digital
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHarvestActiveTab('history')}
+                      className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${harvestActiveTab === 'history' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                    >
+                      📜 Riwayat ({harvestHistory.length})
+                    </button>
+                  </div>
+
+                  {harvestActiveTab === 'sheet' ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const printContents = document.getElementById('print-only-weighing-sheet')?.innerHTML;
+                          if (printContents) {
+                            const originalContents = document.body.innerHTML;
+                            // Open primitive print-friendly popup
+                            const printWindow = window.open('', '_blank');
+                            if (printWindow) {
+                              printWindow.document.write(`
+                                <html>
+                                  <head>
+                                    <title>Cetak Lembar Timbang Panen</title>
+                                    <script src="https://cdn.tailwindcss.com"></script>
+                                    <style>
+                                      body { padding: 40px; background: white; color: black; font-family: monospace; }
+                                      input { border: none !important; border-bottom: 1px dashed #ccc !important; background: transparent !important; pointer-events: none; }
+                                      input::placeholder { color: transparent; }
+                                      button, .no-print { display: none !important; }
+                                    </style>
+                                  </head>
+                                  <body>
+                                    ${printContents}
+                                  </body>
+                                </html>
+                              `);
+                              printWindow.document.close();
+                              setTimeout(() => {
+                                printWindow.print();
+                                printWindow.close();
+                              }, 500);
+                            }
+                          }
+                        }}
+                        className="flex items-center gap-1.5 transition-colors bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest"
+                      >
+                        <Printer size={11} /> Cetak Lembar Timbang
+                      </button>
+                    </div>
                   ) : (
                     <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 text-right">
                       <button 
@@ -1758,7 +1749,7 @@ export default function App() {
                         </div>
                         <div className="flex flex-col pl-4 border-l border-slate-100">
                           <p className="text-[8px] font-black text-slate-400 uppercase">Cumulative Mass</p>
-                          <p className="text-sm font-black text-emerald-600">{harvestHistory.reduce((s, r) => s + r.totalWeight, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[9px] font-normal text-slate-400">KG</span></p>
+                          <p className="text-sm font-black text-emerald-600">{Math.round(harvestHistory.reduce((s, r) => s + r.totalWeight, 0)).toLocaleString()} <span className="text-[9px] font-normal text-slate-400">KG</span></p>
                         </div>
                         {(() => {
                           const withWeighings = harvestHistory.filter(r => r.weighingDrafts && r.weighingDrafts.length > 0);
@@ -1770,7 +1761,7 @@ export default function App() {
                               <div className="flex flex-col border-l border-slate-100 pl-4">
                                 <p className="text-[8px] font-black text-blue-500 uppercase tracking-wider">Total Timbangan</p>
                                 <p className="text-sm font-black text-blue-600">
-                                  {ttlWeighingBirds.toLocaleString()} <span className="text-[9px] text-slate-400 font-bold">Ekor</span> / {ttlWeighingKg.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[9px] font-bold text-slate-400">Kg</span>
+                                  {ttlWeighingBirds.toLocaleString()} <span className="text-[9px] text-slate-400 font-bold">Ekor</span> / {Math.round(ttlWeighingKg).toLocaleString()} <span className="text-[9px] font-bold text-slate-400">Kg</span>
                                 </p>
                               </div>
                             );
@@ -1802,7 +1793,7 @@ export default function App() {
                   )}
                 </div>
 
-                {view === 'weighing' ? (
+                {harvestActiveTab === 'sheet' ? (
                   /* Interactive Paper Sheet Representation mimicking picture */
                   <div className="flex-1 overflow-auto bg-slate-50/50 p-6 scrollbar-thin">
                     <div 
@@ -1850,7 +1841,7 @@ export default function App() {
                           <div className="text-center border-r border-slate-200 pr-4">
                             <p className="text-[8px] font-black uppercase text-slate-450">Berat (Total)</p>
                             <p className="text-sm font-black text-emerald-700">
-                              {validActiveDrafts.reduce((sum, d) => sum + parseWeight(d.weight), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[9px] font-normal text-slate-400">KG</span>
+                              {Math.round(validActiveDrafts.reduce((sum, d) => sum + (parseFloat(d.weight as any) || 0), 0)).toLocaleString()} <span className="text-[9px] font-normal text-slate-400">KG</span>
                             </p>
                           </div>
                           <div className="text-center">
@@ -1858,7 +1849,7 @@ export default function App() {
                             <p className="text-sm font-black text-rose-700">
                               {(() => {
                                 const totalB = validActiveDrafts.reduce((sum, d) => sum + (parseInt(d.birds as any) || 0), 0);
-                                const totalW = validActiveDrafts.reduce((sum, d) => sum + parseWeight(d.weight), 0);
+                                const totalW = validActiveDrafts.reduce((sum, d) => sum + (parseFloat(d.weight as any) || 0), 0);
                                 return totalB > 0 ? (totalW / totalB).toFixed(3) : '0.000';
                               })()}
                             </p>
@@ -1977,36 +1968,36 @@ export default function App() {
 
                       {/* Giant Weighing Grid Table */}
                       <div className="overflow-x-auto border-2 border-slate-850 rounded">
-                        <table className="w-full min-w-[950px] border-collapse text-center font-mono text-xs bg-white">
+                        <table className="w-full border-collapse text-center font-mono text-[11px] bg-white">
                           <thead>
-                            <tr className="bg-slate-100 border-b-2 border-slate-800 text-[11px]">
-                              <th className="py-3 px-1 border-r-2 border-slate-800 font-black text-center w-10 bg-slate-100" rowSpan={2}>No</th>
-                              <th className="py-1.5 border-r-2 border-slate-800 text-center uppercase font-black text-xs" colSpan={2}>Kolom Timbang 1</th>
-                              <th className="py-1.5 border-r-2 border-slate-800 text-center uppercase font-black text-xs" colSpan={2}>Kolom Timbang 2</th>
-                              <th className="py-1.5 border-r-2 border-slate-800 text-center uppercase font-black text-xs" colSpan={2}>Kolom Timbang 3</th>
-                              <th className="py-1.5 border-r-2 border-slate-800 text-center uppercase font-black text-xs" colSpan={2}>Kolom Timbang 4</th>
-                              <th className="py-1.5 border-r-2 border-slate-800 text-center uppercase font-black text-xs" colSpan={2}>Kolom Timbang 5</th>
-                              <th className="py-1.5 border-slate-800 text-center uppercase font-black text-xs" colSpan={2}>Kolom Timbang 6</th>
+                            <tr className="bg-slate-100 border-b-2 border-slate-800 text-[10px]">
+                              <th className="py-2.5 px-1 border-r-2 border-slate-800 font-black text-center w-8 bg-slate-100" rowSpan={2}>No</th>
+                              <th className="py-1 border-r-2 border-slate-800 text-center uppercase font-black" colSpan={2}>Kolom Timbang 1</th>
+                              <th className="py-1 border-r-2 border-slate-800 text-center uppercase font-black" colSpan={2}>Kolom Timbang 2</th>
+                              <th className="py-1 border-r-2 border-slate-800 text-center uppercase font-black" colSpan={2}>Kolom Timbang 3</th>
+                              <th className="py-1 border-r-2 border-slate-800 text-center uppercase font-black" colSpan={2}>Kolom Timbang 4</th>
+                              <th className="py-1 border-r-2 border-slate-800 text-center uppercase font-black" colSpan={2}>Kolom Timbang 5</th>
+                              <th className="py-1 border-slate-800 text-center uppercase font-black" colSpan={2}>Kolom Timbang 6</th>
                             </tr>
-                            <tr className="bg-slate-50 border-b-2 border-slate-800 text-[10px] font-black">
-                              <th className="py-1.5 border-r border-slate-300 w-[7%]">Ekr</th>
-                              <th className="py-1.5 border-r-2 border-slate-800 w-[9%] text-emerald-800">Kg (Net)</th>
-                              <th className="py-1.5 border-r border-slate-300 w-[7%]">Ekr</th>
-                              <th className="py-1.5 border-r-2 border-slate-800 w-[9%] text-emerald-800">Kg (Net)</th>
-                              <th className="py-1.5 border-r border-slate-300 w-[7%]">Ekr</th>
-                              <th className="py-1.5 border-r-2 border-slate-800 w-[9%] text-emerald-800">Kg (Net)</th>
-                              <th className="py-1.5 border-r border-slate-300 w-[7%]">Ekr</th>
-                              <th className="py-1.5 border-r-2 border-slate-800 w-[9%] text-emerald-800">Kg (Net)</th>
-                              <th className="py-1.5 border-r border-slate-300 w-[7%]">Ekr</th>
-                              <th className="py-1.5 border-r-2 border-slate-800 w-[9%] text-emerald-800">Kg (Net)</th>
-                              <th className="py-1.5 border-r border-slate-300 w-[7%]">Ekr</th>
-                              <th className="py-1.5 border-slate-800 w-[9%] text-emerald-800">Kg (Net)</th>
+                            <tr className="bg-slate-50 border-b-2 border-slate-800 text-[9px] font-black">
+                              <th className="py-1 border-r border-slate-300 w-[6.5%]">Ekr</th>
+                              <th className="py-1 border-r-2 border-slate-800 w-[8.5%] text-emerald-800">Kg (Net)</th>
+                              <th className="py-1 border-r border-slate-300 w-[6.5%]">Ekr</th>
+                              <th className="py-1 border-r-2 border-slate-800 w-[8.5%] text-emerald-800">Kg (Net)</th>
+                              <th className="py-1 border-r border-slate-300 w-[6.5%]">Ekr</th>
+                              <th className="py-1 border-r-2 border-slate-800 w-[8.5%] text-emerald-800">Kg (Net)</th>
+                              <th className="py-1 border-r border-slate-300 w-[6.5%]">Ekr</th>
+                              <th className="py-1 border-r-2 border-slate-800 w-[8.5%] text-emerald-800">Kg (Net)</th>
+                              <th className="py-1 border-r border-slate-300 w-[6.5%]">Ekr</th>
+                              <th className="py-1 border-r-2 border-slate-800 w-[8.5%] text-emerald-800">Kg (Net)</th>
+                              <th className="py-1 border-r border-slate-300 w-[6.5%]">Ekr</th>
+                              <th className="py-1 border-slate-800 w-[8.5%] text-emerald-800">Kg (Net)</th>
                             </tr>
                           </thead>
                           <tbody>
                             {Array.from({ length: 15 }).map((_, r) => (
                               <tr key={r} className="border-b border-slate-200 hover:bg-slate-50/70">
-                                <td className="py-1 border-r-2 border-slate-800 font-black bg-slate-50/50 text-slate-500 font-mono text-[10px]">{r + 1}</td>
+                                <td className="py-1 border-r-2 border-slate-800 font-black bg-slate-50/50 text-slate-500 font-mono text-[9px]">{r + 1}</td>
                                 {Array.from({ length: 6 }).map((_, c) => {
                                   const idx = c * 15 + r;
                                   const draft = activeDrafts[idx];
@@ -2016,21 +2007,21 @@ export default function App() {
                                       <td className="p-0 border-r border-slate-200 col-ekor">
                                         <input 
                                           type="number"
-                                          value={draft?.birds === 0 || draft?.birds === '' ? '' : draft?.birds}
+                                          value={draft?.birds === 0 ? '' : draft?.birds}
                                           onChange={(e) => handleCellChange(idx, 'birds', e.target.value)}
                                           placeholder="-"
-                                          className="w-full bg-transparent border-none text-center font-bold font-mono text-[13px] md:text-sm py-2 px-1 focus:bg-amber-50 focus:ring-1 focus:ring-amber-300 focus:outline-none cursor-pointer"
+                                          className="w-full bg-transparent border-none text-center font-bold font-mono text-[11px] py-1 px-0.5 focus:bg-amber-50 focus:ring-1 focus:ring-amber-300 focus:outline-none cursor-pointer"
                                         />
                                       </td>
                                       {/* Kg Cell */}
                                       <td className={`p-0 ${c < 5 ? 'border-r-2 border-slate-800' : ''} col-kg`}>
                                         <input 
-                                          type="text"
-                                          inputMode="decimal"
-                                          value={draft?.weight === 0 || draft?.weight === '' ? '' : draft?.weight}
+                                          type="number"
+                                          step="1"
+                                          value={draft?.weight === 0 ? '' : draft?.weight}
                                           onChange={(e) => handleCellChange(idx, 'weight', e.target.value)}
                                           placeholder="-"
-                                          className="w-full bg-transparent border-none text-center font-mono font-black text-emerald-700 text-[13px] md:text-sm py-2 px-1 focus:bg-amber-50 focus:ring-1 focus:ring-amber-300 focus:outline-none cursor-pointer"
+                                          className="w-full bg-transparent border-none text-center font-mono font-black text-emerald-700 text-[11px] py-1 px-0.5 focus:bg-amber-50 focus:ring-1 focus:ring-amber-300 focus:outline-none cursor-pointer"
                                         />
                                       </td>
                                     </React.Fragment>
@@ -2039,18 +2030,17 @@ export default function App() {
                               </tr>
                             ))}
                             {/* Programmatic Totals Row per Column pair */}
-                            <tr className="bg-slate-100 border-t-2 border-slate-800 font-black text-xs">
-                              <td className="py-2.5 border-r-2 border-slate-800 font-black uppercase text-center bg-slate-100">TTL</td>
+                            <tr className="bg-slate-100 border-t-2 border-slate-800 font-extrabold text-[10px]">
+                              <td className="py-2 border-r-2 border-slate-800 font-black uppercase text-center bg-slate-100">TTL</td>
                               {Array.from({ length: 6 }).map((_, c) => {
                                 const colDrafts = activeDrafts.slice(c * 15, (c + 1) * 15);
-                                const validColDrafts = colDrafts.filter(d => (parseInt(d.birds as any) || 0) > 0 && parseWeight(d.weight) > 0);
-                                const totalCColBirds = validColDrafts.reduce((sum, d) => sum + (parseInt(d.birds as any) || 0), 0);
-                                const totalCColWeight = validColDrafts.reduce((sum, d) => sum + parseWeight(d.weight), 0);
+                                const totalCColBirds = colDrafts.reduce((sum, d) => sum + (parseInt(d.birds as any) || 0), 0);
+                                const totalCColWeight = colDrafts.reduce((sum, d) => sum + (parseFloat(d.weight as any) || 0), 0);
                                 return (
                                   <React.Fragment key={c}>
-                                    <td className="py-2.5 border-r border-slate-200 bg-slate-100/50 text-slate-800 font-black text-[12px]">{totalCColBirds || '-'}</td>
-                                    <td className={`py-2.5 ${c < 5 ? 'border-r-2 border-slate-800' : ''} bg-slate-100/50 text-emerald-700 font-black font-mono text-[12px]`}>
-                                      {totalCColWeight ? totalCColWeight.toFixed(2) : '-'}
+                                    <td className="py-2 border-r border-slate-200 bg-slate-100/50 text-slate-800 font-black">{totalCColBirds || '-'}</td>
+                                    <td className={`py-2 ${c < 5 ? 'border-r-2 border-slate-800' : ''} bg-slate-100/50 text-emerald-700 font-black font-mono`}>
+                                      {totalCColWeight ? Math.round(totalCColWeight) : '-'}
                                     </td>
                                   </React.Fragment>
                                 );
@@ -2136,6 +2126,7 @@ export default function App() {
                               <th className="py-4 px-6 border-b border-slate-100 bg-slate-50">Tanggal</th>
                               <th className="py-4 px-6 border-b border-slate-100 bg-slate-50">Umur</th>
                               <th className="py-4 px-6 border-b border-slate-100 bg-slate-50">Jumlah Ekor</th>
+                              <th className="py-4 px-6 border-b border-slate-100 bg-slate-50 text-emerald-600">Nota Timbang</th>
                               <th className="py-4 px-6 border-b border-slate-100 bg-slate-50">Rata-rata Bobot</th>
                               <th className="py-4 px-6 border-b border-slate-100 bg-slate-50">Total Bobot (kg)</th>
                               <th className="py-4 px-6 border-b border-slate-100 bg-slate-50 text-emerald-600">Total Seluruh Ekor (ekor)</th>
@@ -2171,11 +2162,38 @@ export default function App() {
                                   <td className="py-4 px-6">
                                     <span className="text-slate-900 font-black">{record.birds.toLocaleString()} <span className="text-[9px] font-normal text-slate-400">ekor</span></span>
                                   </td>
+                                  <td className="py-4 px-6">
+                                    {record.weighingDrafts && record.weighingDrafts.length > 0 ? (
+                                      <div className="flex flex-col gap-1">
+                                        <div className="flex items-center gap-2">
+                                          <span className="bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tight whitespace-nowrap">
+                                            {record.weighingDrafts.length} Nota
+                                          </span>
+                                          <span className="text-[11px] font-black text-slate-800 whitespace-nowrap">
+                                            {record.weighingDrafts.reduce((sum, d) => sum + d.birds, 0).toLocaleString()} <span className="text-[9px] text-slate-400 font-normal">ekor</span>
+                                          </span>
+                                          <span className="text-[11px] font-black text-emerald-700 font-mono whitespace-nowrap">
+                                            {Math.round(record.weighingDrafts.reduce((sum, d) => sum + d.weight, 0)).toLocaleString()} <span className="text-[9px] text-slate-400 font-normal">kg</span>
+                                          </span>
+                                        </div>
+                                        <button 
+                                          type="button"
+                                          onClick={() => setSelectedRecordDrafts(record)}
+                                          className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tight self-start shrink-0"
+                                          title="Klik untuk melihat detail nota timbang"
+                                        >
+                                          <Scale size={9} /> Detail Timbangan
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <span className="text-[10px] text-slate-400 italic">Input Manual</span>
+                                    )}
+                                  </td>
                                   <td className="py-4 px-6">{record.avgWeight.toFixed(3)} <span className="text-[9px]">kg/ekor</span></td>
-                                  <td className="py-4 px-6 text-slate-600">{record.totalWeight.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[9px]">kg</span></td>
+                                  <td className="py-4 px-6 text-slate-600">{Math.round(record.totalWeight).toLocaleString()} <span className="text-[9px]">kg</span></td>
                                   <td className="py-4 px-6 text-emerald-600 font-black">{runningTotalBirds.toLocaleString()} <span className="text-[9px] font-normal text-slate-450">ekor</span></td>
                                   <td className="py-4 px-6 text-emerald-600 font-black">{runningAvgWeight} <span className="text-[9px] font-normal text-slate-450">kg</span></td>
-                                  <td className="py-4 px-6 text-emerald-600 font-black">{runningTotalWeight.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[9px]">kg</span></td>
+                                  <td className="py-4 px-6 text-emerald-600 font-black">{Math.round(runningTotalWeight).toLocaleString()} <span className="text-[9px]">kg</span></td>
                                   <td className="py-4 px-6">
                                      <div className="flex flex-col">
                                        <span className="text-emerald-700 font-black text-lg">{Math.round(record.ip).toLocaleString()}</span>
@@ -2198,7 +2216,7 @@ export default function App() {
                             })}
                             {harvestHistory.length === 0 && (
                               <tr>
-                                <td colSpan={11} className="py-20 text-center text-slate-400 font-black uppercase tracking-widest text-[10px]">
+                                <td colSpan={12} className="py-20 text-center text-slate-400 font-black uppercase tracking-widest text-[10px]">
                                   Belum ada data panen
                                 </td>
                               </tr>
@@ -2215,6 +2233,9 @@ export default function App() {
                                     {harvestHistory.reduce((sum, r) => sum + r.birds, 0).toLocaleString()} <span className="text-[10px] text-slate-500 font-normal">ekor</span>
                                   </span>
                                 </td>
+                                <td className="py-4 px-6 text-slate-500 text-[10px]">
+                                  {harvestHistory.reduce((sum, r) => sum + (r.weighingDrafts?.length || 0), 0)} Draft
+                                </td>
                                 <td className="py-4 px-6 font-mono text-slate-800">
                                   {(() => {
                                     const totalB = harvestHistory.reduce((sum, r) => sum + r.birds, 0);
@@ -2223,7 +2244,7 @@ export default function App() {
                                   })()} <span className="text-[10px] text-slate-500 font-normal">kg/ekor</span>
                                 </td>
                                 <td className="py-4 px-6 font-mono text-slate-900">
-                                  {harvestHistory.reduce((sum, r) => sum + r.totalWeight, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[10px] text-slate-500 font-normal">kg</span>
+                                  {Math.round(harvestHistory.reduce((sum, r) => sum + r.totalWeight, 0)).toLocaleString()} <span className="text-[10px] text-slate-500 font-normal">kg</span>
                                 </td>
                                 <td className="py-4 px-6 font-mono text-emerald-800 bg-emerald-50/50">
                                   {harvestHistory.reduce((sum, r) => sum + r.birds, 0).toLocaleString()} <span className="text-[10px] text-emerald-700 font-normal">ekor</span>
@@ -2236,7 +2257,7 @@ export default function App() {
                                   })()} <span className="text-[10px] text-emerald-700 font-normal">kg</span>
                                 </td>
                                 <td className="py-4 px-6 font-mono text-emerald-800 bg-emerald-50/50">
-                                  {harvestHistory.reduce((sum, r) => sum + r.totalWeight, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[10px] text-emerald-700 font-normal">kg</span>
+                                  {Math.round(harvestHistory.reduce((sum, r) => sum + r.totalWeight, 0)).toLocaleString()} <span className="text-[10px] text-emerald-700 font-normal">kg</span>
                                 </td>
                                 <td className="py-4 px-6 text-emerald-700 font-black text-sm">
                                   {(() => {
@@ -2615,7 +2636,7 @@ export default function App() {
                           <div className="flex items-center justify-between">
                             <span className="text-xs font-bold text-slate-400">Total Seluruh Berat Panen</span>
                             <span className="text-xl font-black italic text-emerald-400">
-                              {harvestHistory.reduce((s, r) => s + r.totalWeight, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[9px] text-slate-500 font-normal">KG</span>
+                              {Math.round(harvestHistory.reduce((s, r) => s + r.totalWeight, 0)).toLocaleString()} <span className="text-[9px] text-slate-500 font-normal">KG</span>
                             </span>
                           </div>
                         </div>
@@ -2724,7 +2745,7 @@ export default function App() {
                 </div>
                 <div className="bg-white p-2 rounded border border-slate-100">
                   <p className="text-[8px] font-black text-slate-400 uppercase">Total Netto</p>
-                  <p className="text-xs font-black text-emerald-600">{selectedRecordDrafts.totalWeight.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[8px] font-normal text-slate-400">KG</span></p>
+                  <p className="text-xs font-black text-emerald-600">{Math.round(selectedRecordDrafts.totalWeight).toLocaleString()} <span className="text-[8px] font-normal text-slate-400">KG</span></p>
                 </div>
                 <div className="bg-white p-2 rounded border border-slate-100">
                   <p className="text-[8px] font-black text-slate-400 uppercase">Rata-rata</p>
@@ -2824,7 +2845,7 @@ export default function App() {
                         <div key={draft.id} className="flex justify-between items-center py-2 px-3 hover:bg-slate-50 transition-all font-mono">
                           <span className="text-[9px] text-slate-400 font-bold">Baris #{idx+1}</span>
                           <span className="text-slate-700 font-bold">{draft.birds} <span className="text-[9px] font-normal text-slate-400">ekr</span></span>
-                          <span className="text-emerald-700 font-black text-right">{draft.weight.toFixed(2)} <span className="text-[9px] font-normal text-slate-400">kg</span></span>
+                          <span className="text-emerald-700 font-black text-right">{Math.round(draft.weight)} <span className="text-[9px] font-normal text-slate-400">kg</span></span>
                         </div>
                       ))
                     ) : (
@@ -2856,13 +2877,13 @@ export default function App() {
                           </tr>
                           <tr>
                             <td><strong>SOPIR:</strong></td><td>${selectedRecordDrafts.driverName || '-'} / ${selectedRecordDrafts.plateNo || '-'}</td>
-                            <td><strong>TOTAL:</strong></td><td>${selectedRecordDrafts.birds.toLocaleString()} EKR (${selectedRecordDrafts.totalWeight.toFixed(2)} KG)</td>
+                            <td><strong>TOTAL:</strong></td><td>${selectedRecordDrafts.birds.toLocaleString()} EKR (${Math.round(selectedRecordDrafts.totalWeight).toLocaleString()} KG)</td>
                           </tr>
                         </table>
                         <h3 style="margin-top: 30px; border-bottom: 1px solid black; padding-bottom: 5px;">DRAFT TIMBANGAN:</h3>
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; font-size: 11px;">
                           ${selectedRecordDrafts.weighingDrafts?.map((d, i) => `
-                            <div>[#${i+1}] ${d.birds} Ekr: <strong>${d.weight.toFixed(2)} kg</strong></div>
+                            <div>[#${i+1}] ${d.birds} Ekr: <strong>${Math.round(d.weight)} kg</strong></div>
                           `).join('') || '<div>Input Manual</div>'}
                         </div>
                         <div style="margin-top: 50px; display: flex; justify-content: space-between; text-align: center; font-size: 11px;">
@@ -2892,167 +2913,6 @@ export default function App() {
                 >
                   Tutup Laporan
                 </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-
-        {/* Android PWA Install Onboarding Modal */}
-        {showAndroidModal && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[110] flex items-center justify-center p-4 text-slate-800"
-            onClick={() => setShowAndroidModal(false)}
-          >
-            <motion.div 
-              initial={{ scale: 0.9, y: 30 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 30 }}
-              className="bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col md:flex-row max-h-[92vh] md:max-h-[85vh]"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Left Side: Stunning interactive Android Mockup */}
-              <div className="bg-slate-950 p-6 md:p-8 flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-slate-800 shrink-0 md:w-80">
-                <div className="relative w-48 h-96 bg-slate-900 rounded-[40px] border-[6px] border-slate-700 shadow-2xl p-2 flex flex-col overflow-hidden">
-                  {/* Android Top notch */}
-                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-4 bg-slate-700 rounded-b-xl z-20 flex items-center justify-center">
-                    <div className="w-8 h-1 bg-slate-800 rounded-full"></div>
-                  </div>
-                  
-                  {/* Android Screen Content Mockup */}
-                  <div className="w-full h-full flex flex-col bg-slate-950 rounded-[32px] overflow-hidden relative p-4 pt-6">
-                    {/* Stat Bar */}
-                    <div className="flex justify-between items-center text-[8px] text-emerald-400 font-mono mb-6 pt-1">
-                      <span>LTE / 4G</span>
-                      <span>12:30</span>
-                      <span>100% 🔋</span>
-                    </div>
-
-                    {/* App Icon container */}
-                    <div className="flex flex-col items-center justify-center flex-1 my-2">
-                      <div className="w-20 h-20 bg-gradient-to-tr from-emerald-500 to-teal-400 rounded-3xl shadow-xl p-0.5 flex items-center justify-center mb-3">
-                        <div className="w-full h-full bg-slate-950 rounded-[22px] flex items-center justify-center overflow-hidden">
-                          <img src="/icon.svg" className="w-16 h-16" referrerPolicy="no-referrer" alt="Erfours logo" />
-                        </div>
-                      </div>
-                      <h4 className="text-white text-xs font-black tracking-wider text-center">ERFOURS</h4>
-                      <p className="text-[7px] text-emerald-400 font-bold uppercase tracking-widest mt-1">BroilerPro APK</p>
-                    </div>
-
-                    {/* Mock Launcher App Drawer */}
-                    <div className="bg-slate-900/80 backdrop-blur rounded-2xl p-2.5 border border-slate-800/60 flex flex-col gap-1.5 mt-auto">
-                      <div className="flex items-center gap-2">
-                        <div className="w-5 h-5 bg-emerald-500/20 rounded flex items-center justify-center">
-                          <Check size={10} className="text-emerald-400" />
-                        </div>
-                        <span className="text-[7px] text-slate-300 font-black">Offline-First Logging</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-5 h-5 bg-emerald-500/20 rounded flex items-center justify-center">
-                          <Check size={10} className="text-emerald-400" />
-                        </div>
-                        <span className="text-[7px] text-slate-300 font-black">Automatic FCR & IP</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <p className="text-[10px] text-slate-500 font-mono mt-4 text-center select-none">Paket Distribusi Android PWA</p>
-              </div>
-
-              {/* Right Side: Install Onboarding details */}
-              <div className="flex-1 p-6 md:p-8 flex flex-col overflow-y-auto text-slate-200">
-                <div className="flex justify-between items-start mb-6">
-                  <div>
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-black uppercase tracking-wider mb-2">
-                      <Smartphone size={11} /> Android App Edition
-                    </div>
-                    <h3 className="text-2xl font-black text-white tracking-tight uppercase">Pasang Aplikasi Erfours</h3>
-                    <p className="text-xs text-slate-400 mt-1 font-medium">Bawa sistem pencatatan ayam pedaging Anda kemana saja dengan performa maksimal.</p>
-                  </div>
-                  <button 
-                    onClick={() => setShowAndroidModal(false)}
-                    className="p-1.5 rounded-full bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-all cursor-pointer"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-
-                {/* Android App Key Advantages */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-                  <div className="bg-slate-950/60 border border-slate-800 p-3.5 rounded-xl">
-                    <div className="text-emerald-400 font-black text-sm mb-1">📶 Bebas Offline</div>
-                    <p className="text-[10px] text-slate-400 leading-normal font-bold">Tetap catat timbangan, pakan mati di kandang tanpa sinyal internet.</p>
-                  </div>
-                  <div className="bg-slate-950/60 border border-slate-800 p-3.5 rounded-xl">
-                    <div className="text-emerald-400 font-black text-sm mb-1">⚡ Instant Launch</div>
-                    <p className="text-[10px] text-slate-400 leading-normal font-bold">Membuka secepat kilat dengan ikon pintasan resmi di layar utama ponsel.</p>
-                  </div>
-                  <div className="bg-slate-950/60 border border-slate-800 p-3.5 rounded-xl">
-                    <div className="text-emerald-400 font-black text-sm mb-1">📲 Tanpa Ruang Besar</div>
-                    <p className="text-[10px] text-slate-400 leading-normal font-bold">Ukuran sangat kecil (di bawah 1MB) dibandingkan aplikasi PlayStore konvensional.</p>
-                  </div>
-                </div>
-
-                {/* Installation Flow */}
-                <div className="bg-slate-950/40 border border-slate-800/80 rounded-xl p-5 mb-6 flex-1">
-                  <h4 className="text-xs font-black text-emerald-400 uppercase tracking-wider mb-3.5">Petunjuk Pemasangan Aplikasi:</h4>
-                  
-                  {deferredPrompt ? (
-                    <div className="space-y-4">
-                      <p className="text-xs text-slate-300 font-bold leading-relaxed">
-                        Browser Anda mendeteksi bahwa aplikasi Erfours siap dipasang secara langsung sebagai aplikasi Android asli yang didukung oleh integrasi WebAPK Google.
-                      </p>
-                      <button
-                        onClick={() => {
-                          deferredPrompt.prompt();
-                          deferredPrompt.userChoice.then((choiceResult: any) => {
-                            if (choiceResult.outcome === 'accepted') {
-                              setIsWebAppInstalled(true);
-                              setShowAndroidModal(false);
-                            }
-                            setDeferredPrompt(null);
-                          });
-                        }}
-                        className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 active:scale-[0.98] transition-all rounded-xl font-bold text-sm tracking-wide text-white shadow-xl shadow-emerald-950/20 cursor-pointer flex items-center justify-center gap-2"
-                      >
-                        <Smartphone size={18} /> PASANG APLIKASI SEKARANG
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="space-y-3.5 text-xs text-slate-300">
-                      <p className="font-bold text-amber-400">Ponsel Anda dapat memasangnya lewat petunjuk sederhana berikut:</p>
-                      <div className="space-y-3">
-                        <div className="flex items-start gap-4">
-                          <span className="w-5 h-5 bg-slate-800 text-emerald-400 text-[10px] font-black rounded-full flex items-center justify-center shrink-0 mt-0.5">1</span>
-                          <span className="leading-relaxed">Buka halaman situs ini dari aplikasi browser <strong>Google Chrome</strong> di HP Android Anda.</span>
-                        </div>
-                        <div className="flex items-start gap-4">
-                          <span className="w-5 h-5 bg-slate-800 text-emerald-400 text-[10px] font-black rounded-full flex items-center justify-center shrink-0 mt-0.5">2</span>
-                          <span className="leading-relaxed">Ketuk menu setelan di kanan atas browser Chrome Anda (<strong>ikon titik tiga ⁝</strong>).</span>
-                        </div>
-                        <div className="flex items-start gap-4">
-                          <span className="w-5 h-5 bg-slate-800 text-emerald-400 text-[10px] font-black rounded-full flex items-center justify-center shrink-0 mt-0.5">3</span>
-                          <span className="leading-relaxed">Pilih tulisan <strong>"Instal Aplikasi"</strong> atau <strong>"Tambahkan ke Layar Utama"</strong>.</span>
-                        </div>
-                        <div className="flex items-start gap-4">
-                          <span className="w-5 h-5 bg-slate-800 text-emerald-400 text-[10px] font-black rounded-full flex items-center justify-center shrink-0 mt-0.5">4</span>
-                          <span className="leading-relaxed">Tekan tombol <strong>"Instal"</strong>. Selesai! Erfours siap berjalan di HP Anda dengan ikon mandiri.</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Footer status */}
-                <div className="flex items-center justify-between border-t border-slate-800 text-[10px] text-slate-500 font-mono mt-auto pt-4">
-                  <span>PWA Versi 1.0.0 (API v2)</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className={`w-1.5 h-1.5 rounded-full ${isWebAppInstalled ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
-                    <span>Status: {isWebAppInstalled ? 'Terpasang di Perangkat' : 'Siap Dipasang'}</span>
-                  </div>
-                </div>
               </div>
             </motion.div>
           </motion.div>
