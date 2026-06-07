@@ -1,0 +1,25 @@
+{
+  "name": "Erfours Broiler Monitor",
+  "short_name": "Erfours",
+  "description": "Daily Monitoring App for Broiler Poultry: FCR, Feed Tracking, and Performance Index (IP) monitoring in real-time.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#090d16",
+  "theme_color": "#10b981",
+  "orientation": "portrait-primary",
+  "categories": ["business", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
