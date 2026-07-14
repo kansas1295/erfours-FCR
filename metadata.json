@@ -1,6 +1,6 @@
 {
-  "name": "erfours",
-  "description": "Daily Monitoring App for Broiler Poultry: FCR, Feed Tracking, and Performance Index (IP) monitoring in real-time.",
+  "name": "Erfours BroilerPro",
+  "description": "Aplikasi berbasis web untuk memantau performa harian peternakan ayam broiler: FCR, stok pakan, mortalitas, dan Indeks Performa (IP) secara real-time.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
